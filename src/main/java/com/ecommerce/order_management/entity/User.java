@@ -1,6 +1,7 @@
 package com.ecommerce.order_management.entity;
 
 import jakarta.persistence.*;
+import jakarta.validation.constraints.*;
 import lombok.*;
 import org.hibernate.annotations.CreationTimestamp;
 import org.springframework.security.core.GrantedAuthority;
@@ -13,9 +14,8 @@ import java.util.List;
 import java.util.ArrayList;
 
 /**
- * Entité User;
- * implémente UserDetails pour Spring Security.
- * Champs essentiels : email unique, password, role, enabled, createdAt, orders.
+ * Entité User ; implémente UserDetails pour Spring Security.
+ * Ajout de validations : email, password minimal, noms non vides.
  */
 @Entity
 @Table(name = "users")
@@ -29,13 +29,23 @@ public class User implements UserDetails {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
+    // email valide et non vide
     @Column(unique = true, nullable = false)
+    @Email(message = "Email invalide")
+    @NotBlank(message = "Email requis")
     private String email;
 
+    // mot de passe stocké encodé ; contrainte minimale de longueur (côté backend)
     @Column(nullable = false)
+    @NotBlank(message = "Mot de passe requis")
+    @Size(min = 8, message = "Le mot de passe doit contenir au moins 8 caractères")
     private String password;
 
+    // noms facultatifs mais si fournis on évite les chaînes vides
+    @NotBlank(message = "Prénom requis")
     private String firstName;
+
+    @NotBlank(message = "Nom requis")
     private String lastName;
 
     @Enumerated(EnumType.STRING)

@@ -1,6 +1,7 @@
 package com.ecommerce.order_management.entity;
 
 import jakarta.persistence.*;
+import jakarta.validation.constraints.*;
 import lombok.*;
 import org.hibernate.annotations.CreationTimestamp;
 
@@ -24,16 +25,22 @@ public class Order {
     private Long id;
 
     @ManyToOne(fetch = FetchType.LAZY, optional = false)
-    @JoinColumn(name = "user_id")
+    @JoinColumn(name = "user_id", nullable = false)
+    @NotNull(message = "Utilisateur requis pour la commande")
     private User user;
 
     @OneToMany(mappedBy = "order", cascade = CascadeType.ALL, orphanRemoval = true)
+    @Size(min = 1, message = "La commande doit contenir au moins 1 article")
     private List<OrderItem> items = new ArrayList<>();
 
     @Enumerated(EnumType.STRING)
     private OrderStatus status = OrderStatus.PENDING;
 
+    @NotNull(message = "Le montant total est requis")
+    @DecimalMin(value = "0.0", inclusive = true, message = "Le total doit être positif ou nul")
     private BigDecimal totalAmount;
+
+    @NotBlank(message = "Adresse de livraison requise")
     private String shippingAddress;
 
     @CreationTimestamp

@@ -1,7 +1,6 @@
 package com.ecommerce.order_management.service;
 
 import com.ecommerce.order_management.entity.User;
-import org.springframework.security.core.userdetails.UserDetailsService;
 
 import java.util.List;
 
@@ -10,7 +9,7 @@ import java.util.List;
  * Étend UserDetailsService pour intégrer Spring Security (loadUserByUsername).
  * Implémentations : UserServiceImpl.
  */
-public interface UserService extends UserDetailsService {
+public interface UserService {
 
     User findById(Long id);
 

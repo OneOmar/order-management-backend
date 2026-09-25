@@ -40,19 +40,20 @@ public class JwtUtil {
 
     /* ---------- Génération de tokens ---------- */
 
-    // Access token (type=access)
+    // Access token (access)
     public String generateAccessToken(UserDetails user) {
         return buildToken(user.getUsername(), expirationMs, "access");
     }
 
-    // Refresh token (type=refresh)
+    // Refresh token (refresh)
     public String generateRefreshToken(UserDetails user) {
         return buildToken(user.getUsername(), refreshExpirationMs, "refresh");
     }
 
-    // Construction du token (subject + type + dates + signature)
+    // Construction du token
     private String buildToken(String subject, long expiryMs, String type) {
         Date now = new Date();
+
         return Jwts.builder()
                 .setSubject(subject)
                 .claim("type", type)
@@ -64,7 +65,7 @@ public class JwtUtil {
 
     /* ---------- Parsing / extraction / validation (explicit) ---------- */
 
-    // Extrait le username (subject) — utilise parseClaims directement
+    // Extrait le username (subject)
     public String extractUsername(String token) {
         Claims claims = parseClaims(token);
         return claims.getSubject();
@@ -79,11 +80,11 @@ public class JwtUtil {
     // Extrait la claim custom "type" si présente (ex: "access" ou "refresh")
     public String extractType(String token) {
         Claims claims = parseClaims(token);
-        Object t = claims.get("type");
-        return t != null ? t.toString() : null;
+        Object type = claims.get("type");
+        return type != null ? type.toString() : null;
     }
 
-    // Vérifie si token valide pour l'utilisateur (subject correspond + pas expiré)
+    // Vérifie si token valide pour l'utilisateur
     public boolean isTokenValid(String token, UserDetails user) {
         try {
             String username = extractUsername(token);
@@ -91,8 +92,18 @@ public class JwtUtil {
                     && username.equals(user.getUsername())
                     && !isTokenExpired(token);
         } catch (JwtException | IllegalArgumentException ex) {
-            return false; // token invalide / signature incorrecte / mal formé
+            return false;
         }
+    }
+
+    // Vérifie si refresh token
+    public boolean isRefreshToken(String token) {
+        return "refresh".equals(extractType(token));
+    }
+
+    // Vérifie si access token
+    public boolean isAccessToken(String token) {
+        return "access".equals(extractType(token));
     }
 
     // Vérifie l'expiration — explicite
@@ -103,13 +114,16 @@ public class JwtUtil {
 
     /* ---------- Parsing centralisé (méthode unique) ---------- */
 
-    // Normalise un header Authorization (supprime "Bearer " si présent)
+    // supprime "Bearer "
     private String normalizeToken(String token) {
         if (token == null) return null;
+
         token = token.trim();
+
         if (token.startsWith("Bearer ")) {
-            return token.substring(7).trim();
+            return token.substring(7);
         }
+
         return token;
     }
 

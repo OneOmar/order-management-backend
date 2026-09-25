@@ -6,6 +6,8 @@ import com.ecommerce.order_management.auth.dto.RefreshTokenRequest;
 import com.ecommerce.order_management.auth.dto.RegisterRequest;
 import com.ecommerce.order_management.entity.Role;
 import com.ecommerce.order_management.entity.User;
+import com.ecommerce.order_management.exception.InvalidTokenException;
+import com.ecommerce.order_management.exception.NotFoundException;
 import com.ecommerce.order_management.repository.UserRepository;
 import com.ecommerce.order_management.security.JwtUtil;
 import lombok.RequiredArgsConstructor;
@@ -69,27 +71,34 @@ public class AuthService {
 
         // récupérer user depuis DB
         User user = userRepository.findByEmail(email)
-                .orElseThrow(() -> new RuntimeException("User not found"));
+                .orElseThrow(() -> new NotFoundException("User not found"));
 
         return buildAuthResponse(user);
     }
 
-    // refresh token
+    // refresh token sécurisé
     public AuthResponse refreshToken(RefreshTokenRequest request) {
 
         String token = request.refreshToken();
 
-        // extraire username depuis token
-        String username = jwtUtil.extractUsername(token);
-
-        User user = userRepository.findByEmail(username)
-                .orElseThrow(() -> new RuntimeException("User not found"));
-
-        // vérifier validité du token
-        if (!jwtUtil.isTokenValid(token, user)) {
-            throw new RuntimeException("Invalid refresh token");
+        // vérifier type = refresh
+        if (!jwtUtil.isRefreshToken(token)) {
+            throw new InvalidTokenException("Invalid token type");
         }
 
+        // extraire username
+        String username = jwtUtil.extractUsername(token);
+
+        // ️récupérer user
+        User user = userRepository.findByEmail(username)
+                .orElseThrow(() -> new NotFoundException("User not found"));
+
+        // vérifier validité token
+        if (!jwtUtil.isTokenValid(token, user)) {
+            throw new InvalidTokenException("Invalid or expired refresh token");
+        }
+
+        // générer nouveaux tokens
         return buildAuthResponse(user);
     }
 

@@ -69,6 +69,19 @@ public class UserController {
 
     /**
      * ADMIN ONLY
+     * Désactiver un utilisateur
+     */
+    @PatchMapping("/{id}/disable")
+    @PreAuthorize("hasRole('ADMIN')")
+    public ResponseEntity<Void> disableUser(@PathVariable Long id) {
+
+        userService.disableUser(id);
+
+        return ResponseEntity.noContent().build();
+    }
+
+    /**
+     * ADMIN ONLY
      * Suppression user
      */
     @DeleteMapping("/{id}")

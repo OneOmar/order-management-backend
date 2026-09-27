@@ -20,7 +20,9 @@ public interface UserService {
     List<User> listAll();
 
     /**
-     * Inscription : valide l'input, encode le mot de passe, assigne ROLE_USER par défaut.
+     * Inscription : valide l'input,
+     * encode le mot de passe,
+     * assigne ROLE_USER par défaut.
      */
     User register(User user);
 
@@ -28,6 +30,11 @@ public interface UserService {
      * Mise à jour partielle ou complète.
      */
     User update(Long id, User updated);
+
+    /**
+     * Désactiver un utilisateur (enabled = false)
+     */
+    void disableUser(Long id);
 
     void deleteById(Long id);
 }

@@ -32,6 +32,11 @@ public interface UserService {
     User update(Long id, User updated);
 
     /**
+     * Mise à jour du user connecté via email (sécurisé)
+     */
+    User updateByEmail(String email, User updated);
+
+    /**
      * Désactiver un utilisateur (enabled = false)
      */
     void disableUser(Long id);

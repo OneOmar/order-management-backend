@@ -135,6 +135,32 @@ public class UserServiceImpl implements UserService {
         return userRepository.save(existing);
     }
 
+    /**
+     * Mise à jour du profil du user connecté
+     * basé sur email (JWT)
+     */
+    @Override
+    @Transactional
+    public User updateByEmail(String email, User updated) {
+
+        User existing = findByEmail(email); // récupère le BON user
+
+        // update partiel (safe)
+        if (updated.getFirstName() != null) {
+            existing.setFirstName(updated.getFirstName());
+        }
+
+        if (updated.getLastName() != null) {
+            existing.setLastName(updated.getLastName());
+        }
+
+        if (updated.getPassword() != null && !updated.getPassword().isBlank()) {
+            existing.setPassword(passwordEncoder.encode(updated.getPassword()));
+        }
+
+        return userRepository.save(existing);
+    }
+
     // Désactiver un utilisateur
     @Override
     @Transactional

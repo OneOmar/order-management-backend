@@ -52,6 +52,25 @@ public class UserController {
     }
 
     /**
+     * USER connecté
+     * Modifier son propre profil
+     */
+    @PutMapping("/me")
+    public ResponseEntity<UserResponseDTO> updateMe(
+            Authentication authentication,
+            @RequestBody UserUpdateRequest request
+    ) {
+
+        String email = authentication.getName(); // user connecté
+
+        User updated = mapToEntity(request);
+
+        User saved = userService.updateByEmail(email, updated);
+
+        return ResponseEntity.ok(map(saved));
+    }
+
+    /**
      * ADMIN ONLY
      * Récupérer un user par ID
      */

@@ -145,6 +145,17 @@ public class UserServiceImpl implements UserService {
         userRepository.save(user);
     }
 
+    // Activer un utilisateur
+    @Override
+    @Transactional
+    public void enableUser(Long id) {
+
+        User user = findById(id);
+        user.setEnabled(true); // réactive
+
+        userRepository.save(user);
+    }
+
     // suppression user
     @Override
     @Transactional

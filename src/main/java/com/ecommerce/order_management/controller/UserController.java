@@ -82,6 +82,19 @@ public class UserController {
 
     /**
      * ADMIN ONLY
+     * Activer un utilisateur
+     */
+    @PatchMapping("/{id}/enable")
+    @PreAuthorize("hasRole('ADMIN')")
+    public ResponseEntity<Void> enableUser(@PathVariable Long id) {
+
+        userService.enableUser(id);
+
+        return ResponseEntity.noContent().build();
+    }
+
+    /**
+     * ADMIN ONLY
      * Suppression user
      */
     @DeleteMapping("/{id}")

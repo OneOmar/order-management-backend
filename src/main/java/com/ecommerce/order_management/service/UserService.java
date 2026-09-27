@@ -36,5 +36,10 @@ public interface UserService {
      */
     void disableUser(Long id);
 
+    /**
+     * Activer un utilisateur (enabled = true)
+     */
+    void enableUser(Long id);
+
     void deleteById(Long id);
 }

@@ -9,6 +9,7 @@ import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
@@ -34,6 +35,20 @@ public class UserController {
                 .toList();
 
         return ResponseEntity.ok(users);
+    }
+
+    /**
+     * USER connecté
+     * Récupérer son propre profil
+     */
+    @GetMapping("/me")
+    public ResponseEntity<UserResponseDTO> me(Authentication authentication) {
+
+        String email = authentication.getName(); // récupéré depuis JWT
+
+        User user = userService.findByEmail(email);
+
+        return ResponseEntity.ok(map(user));
     }
 
     /**

@@ -137,6 +137,7 @@ public class UserServiceImpl implements UserService {
 
     // Désactiver un utilisateur
     @Override
+    @Transactional
     public void disableUser(Long id) {
 
         User user = findById(id);

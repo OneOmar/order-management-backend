@@ -1,6 +1,7 @@
 package com.ecommerce.order_management.exception;
 
 import java.time.Instant;
+import java.util.Map;
 
 /**
  * DTO pour répondre aux erreurs de l'API de façon typée et claire.
@@ -11,5 +12,6 @@ public record ApiError(
         int status,
         String error,
         String message,
-        String path
+        String path,
+        Map<String, String> errors
 ) {}

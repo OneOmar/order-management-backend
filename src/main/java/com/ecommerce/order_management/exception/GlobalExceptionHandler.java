@@ -18,7 +18,6 @@ import java.util.stream.Collectors;
 /**
  * Gestionnaire global des exceptions.
  * Transforme les exceptions métier / de validation en réponses JSON structurées.
- *
  * Gère (exemples) :
  *  - NotFoundException -> 404
  *  - InsufficientStockException -> 400
@@ -33,7 +32,30 @@ public class GlobalExceptionHandler {
 
     /* Helper : construit un ApiError simple et typé */
     private ApiError buildApiError(HttpStatus status, String message, String path) {
-        return new ApiError(Instant.now(), status.value(), status.getReasonPhrase(), message, path);
+        return new ApiError(
+                Instant.now(),
+                status.value(),
+                status.getReasonPhrase(),
+                message,
+                path,
+                null
+        );
+    }
+
+    private ApiError buildApiError(
+            HttpStatus status,
+            String message,
+            String path,
+            Map<String, String> errors
+    ) {
+        return new ApiError(
+                Instant.now(),
+                status.value(),
+                status.getReasonPhrase(),
+                message,
+                path,
+                errors
+        );
     }
 
     @ExceptionHandler(NotFoundException.class)
@@ -50,24 +72,58 @@ public class GlobalExceptionHandler {
 
     @ExceptionHandler(MethodArgumentNotValidException.class)
     public ResponseEntity<ApiError> handleValidationErrors(MethodArgumentNotValidException ex, HttpServletRequest request) {
-        // Concatène les erreurs de champs en une phrase courte : "field: message; field2: message2"
-        String details = ex.getBindingResult()
+
+        Map<String, String> errors = ex.getBindingResult()
                 .getFieldErrors()
                 .stream()
-                .map(fe -> fe.getField() + ": " + fe.getDefaultMessage())
-                .collect(Collectors.joining("; "));
-        ApiError body = buildApiError(HttpStatus.BAD_REQUEST, "Validation failed: " + details, request.getRequestURI());
+                .collect(Collectors.toMap(
+                        fe -> fe.getField(),
+                        fe -> fe.getDefaultMessage(),
+                        (msg1, msg2) -> msg1
+                ));
+
+        ApiError body = buildApiError(
+                HttpStatus.BAD_REQUEST,
+                "Validation failed",
+                request.getRequestURI(),
+                errors
+        );
+
+        return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(body);
+    }
+    @ExceptionHandler(ConstraintViolationException.class)
+    public ResponseEntity<ApiError> handleConstraintViolation(ConstraintViolationException ex, HttpServletRequest request) {
+
+        Map<String, String> errors = ex.getConstraintViolations()
+                .stream()
+                .collect(Collectors.toMap(
+                        v -> v.getPropertyPath().toString(),
+                        ConstraintViolation::getMessage,
+                        (msg1, msg2) -> msg1
+                ));
+
+        ApiError body = buildApiError(
+                HttpStatus.BAD_REQUEST,
+                "Constraint violations",
+                request.getRequestURI(),
+                errors
+        );
+
         return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(body);
     }
 
-    @ExceptionHandler(ConstraintViolationException.class)
-    public ResponseEntity<ApiError> handleConstraintViolation(ConstraintViolationException ex, HttpServletRequest request) {
-        String details = ex.getConstraintViolations()
-                .stream()
-                .map(ConstraintViolation::getMessage)
-                .distinct()
-                .collect(Collectors.joining("; "));
-        ApiError body = buildApiError(HttpStatus.BAD_REQUEST, "Constraint violations: " + details, request.getRequestURI());
+    @ExceptionHandler(IllegalArgumentException.class)
+    public ResponseEntity<ApiError> handleIllegalArgument(
+            IllegalArgumentException ex,
+            HttpServletRequest request
+    ) {
+
+        ApiError body = buildApiError(
+                HttpStatus.BAD_REQUEST,
+                ex.getMessage(),
+                request.getRequestURI()
+        );
+
         return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(body);
     }
 
@@ -99,8 +155,13 @@ public class GlobalExceptionHandler {
 
     @ExceptionHandler(Exception.class)
     public ResponseEntity<ApiError> handleAll(Exception ex, HttpServletRequest request) {
-        // Fallback simple : renvoyer message d'erreur général
-        ApiError body = buildApiError(HttpStatus.INTERNAL_SERVER_ERROR, "Unexpected error: " + ex.getMessage(), request.getRequestURI());
+
+        ApiError body = buildApiError(
+                HttpStatus.INTERNAL_SERVER_ERROR,
+                "Unexpected server error",
+                request.getRequestURI()
+        );
+
         return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(body);
     }
 }

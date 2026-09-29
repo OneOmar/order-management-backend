@@ -1,0 +1,18 @@
+# Keep only JAR
+target/*
+!target/*.jar
+
+# Git
+.git
+.gitignore
+
+# Env (secrets)
+.env
+
+# Logs / temp
+*.log
+*.tmp
+
+# Optional
+node_modules
+README.md

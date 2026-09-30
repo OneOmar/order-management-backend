@@ -1,5 +1,6 @@
 package com.ecommerce.order_management.security;
 
+import jakarta.servlet.http.HttpServletResponse;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.security.authentication.AuthenticationManager;
@@ -29,24 +30,33 @@ public class SecurityConfig {
     public SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
 
         http
-                // API REST → pas besoin de CSRF
+                // Désactive CSRF (API REST stateless)
                 .csrf(csrf -> csrf.disable())
 
-                // règles d'accès (public / sécurisé)
+                // Gestion des accès
                 .authorizeHttpRequests(auth -> auth
-                        .requestMatchers("/api/v1/auth/**").permitAll()
-                        .requestMatchers("/actuator/**").permitAll()
+                        .requestMatchers("/api/v1/auth/**").permitAll()   // login/register
+                        .requestMatchers("/actuator/**").permitAll()     // health
                         .requestMatchers("/swagger-ui/**").permitAll()
                         .requestMatchers("/v3/api-docs/**").permitAll()
-                        .anyRequest().authenticated()
+                        .anyRequest().authenticated()                    // le reste sécurisé
                 )
 
-                // pas de session → JWT only
+                // Pas de session (JWT only)
                 .sessionManagement(session ->
                         session.sessionCreationPolicy(SessionCreationPolicy.STATELESS)
                 )
 
-                // ajoute le filtre JWT avant le filtre Spring Security
+                // Force 401 au lieu de 403 si non authentifié
+                .exceptionHandling(exception -> exception
+                        .authenticationEntryPoint((request,
+                                                   response,
+                                                   authException) -> {
+                            response.sendError(HttpServletResponse.SC_UNAUTHORIZED, "Unauthorized");
+                        })
+                )
+
+                // Ajoute le filtre JWT avant Spring Security
                 .addFilterBefore(jwtAuthFilter, UsernamePasswordAuthenticationFilter.class);
 
         return http.build();

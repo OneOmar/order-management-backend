@@ -1,0 +1,22 @@
+# le build local
+target/
+
+# Git
+.git
+.gitignore
+
+# Env (secrets)
+.env
+
+# Logs / temp
+*.log
+*.tmp
+
+# IDE
+.idea
+.vscode
+*.iml
+
+# Optional
+node_modules
+README.md

@@ -156,9 +156,11 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(Exception.class)
     public ResponseEntity<ApiError> handleAll(Exception ex, HttpServletRequest request) {
 
+        ex.printStackTrace();
+
         ApiError body = buildApiError(
                 HttpStatus.INTERNAL_SERVER_ERROR,
-                "Unexpected server error",
+                ex.getMessage(),
                 request.getRequestURI()
         );
 

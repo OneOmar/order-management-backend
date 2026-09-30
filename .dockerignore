@@ -1,6 +1,5 @@
-# Keep only JAR
-target/*
-!target/*.jar
+# le build local
+target/
 
 # Git
 .git
@@ -12,6 +11,11 @@ target/*
 # Logs / temp
 *.log
 *.tmp
+
+# IDE
+.idea
+.vscode
+*.iml
 
 # Optional
 node_modules

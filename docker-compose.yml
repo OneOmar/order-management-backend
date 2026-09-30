@@ -39,12 +39,13 @@ services:
       - .env
 
     environment:
+      SPRING_PROFILES_ACTIVE: prod
       SPRING_DATASOURCE_URL: jdbc:postgresql://db:5432/orderdb
       SPRING_DATASOURCE_USERNAME: ${POSTGRES_USER}
       SPRING_DATASOURCE_PASSWORD: ${POSTGRES_PASSWORD}
       JWT_SECRET: ${JWT_SECRET}
 
-    restart: always  # redémarre automatiquement si crash
+    # restart: always  # redémarre automatiquement si crash
 
 volumes:
   postgres_data:

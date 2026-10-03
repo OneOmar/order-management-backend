@@ -2,6 +2,8 @@ package com.ecommerce.order_management.service;
 
 import com.ecommerce.order_management.entity.Order;
 import com.ecommerce.order_management.entity.OrderStatus;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 
 import java.util.List;
 
@@ -20,8 +22,8 @@ public interface OrderService {
     Order createOrder(Long userId, Order orderRequest);
 
     Order findById(Long id);
-
-    List<Order> findByUserId(Long userId);
+    
+    Page<Order> findByUserId(Long userId, Pageable pageable);
 
     List<Order> findByStatus(OrderStatus status);
 

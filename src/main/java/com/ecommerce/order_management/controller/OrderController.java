@@ -11,6 +11,10 @@ import com.ecommerce.order_management.service.OrderService;
 import com.ecommerce.order_management.service.UserService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.security.core.Authentication;
@@ -49,15 +53,23 @@ public class OrderController {
      * Récupérer ses commandes
      */
     @GetMapping("/me")
-    public ResponseEntity<List<OrderResponseDTO>> myOrders(Authentication authentication) {
-
+    public ResponseEntity<Page<OrderResponseDTO>> myOrders(
+            Authentication authentication,
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "5") int size
+    ) {
         String email = authentication.getName();
         User user = userService.findByEmail(email);
 
-        List<OrderResponseDTO> orders = orderService.findByUserId(user.getId())
-                .stream()
-                .map(OrderMapper::toDTO)
-                .toList();
+        Pageable pageable = PageRequest.of(
+                page,
+                size,
+                Sort.by("createdAt").descending()
+        );
+
+        Page<OrderResponseDTO> orders = orderService
+                .findByUserId(user.getId(), pageable)
+                .map(OrderMapper::toDTO);
 
         return ResponseEntity.ok(orders);
     }

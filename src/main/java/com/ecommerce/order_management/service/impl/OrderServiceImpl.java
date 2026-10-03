@@ -8,6 +8,8 @@ import com.ecommerce.order_management.service.OrderService;
 import com.ecommerce.order_management.service.ProductService;
 import com.ecommerce.order_management.service.UserService;
 import lombok.RequiredArgsConstructor;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -104,9 +106,22 @@ public class OrderServiceImpl implements OrderService {
      * Commandes d’un user
      */
     @Override
-    public List<Order> findByUserId(Long userId) {
-        User user = userService.findById(userId);
-        return orderRepository.findByUserOrderByCreatedAtDesc(user);
+    public Page<Order> findByUserId(Long userId, Pageable pageable) {
+        return orderRepository.findByUserId(userId, pageable);
+    }
+
+    @Override
+    public Page<Order> findByUserIdAndStatus(Long userId, String status, Pageable pageable) {
+
+        OrderStatus orderStatus;
+
+        try {
+            orderStatus = OrderStatus.valueOf(status.toUpperCase());
+        } catch (Exception e) {
+            throw new IllegalArgumentException("Statut invalide: " + status);
+        }
+
+        return orderRepository.findByUserIdAndStatus(userId, orderStatus, pageable);
     }
 
     /**

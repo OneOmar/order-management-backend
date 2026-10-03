@@ -110,6 +110,20 @@ public class OrderServiceImpl implements OrderService {
         return orderRepository.findByUserId(userId, pageable);
     }
 
+    @Override
+    public Page<Order> findByUserIdAndStatus(Long userId, String status, Pageable pageable) {
+
+        OrderStatus orderStatus;
+
+        try {
+            orderStatus = OrderStatus.valueOf(status.toUpperCase());
+        } catch (Exception e) {
+            throw new IllegalArgumentException("Statut invalide: " + status);
+        }
+
+        return orderRepository.findByUserIdAndStatus(userId, orderStatus, pageable);
+    }
+
     /**
      * Commandes par statut
      */

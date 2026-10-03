@@ -15,25 +15,18 @@ import java.util.List;
  */
 public interface OrderService {
 
-    /**
-     * Crée une commande pour l'utilisateur donné (userId).
-     * Implémentation : valider stock, décrémenter, calculer total, sauvegarder.
-     */
+
     Order createOrder(Long userId, Order orderRequest);
 
     Order findById(Long id);
-    
+
     Page<Order> findByUserId(Long userId, Pageable pageable);
+
+    Page<Order> findByUserIdAndStatus(Long userId, String status, Pageable pageable);
 
     List<Order> findByStatus(OrderStatus status);
 
-    /**
-     * Met à jour le statut d'une commande (ex: CONFIRMED, SHIPPED, CANCELLED).
-     */
     Order updateStatus(Long orderId, OrderStatus newStatus);
 
-    /**
-     * Annule une commande si possible (restock si nécessaire).
-     */
     void cancelOrder(Long orderId);
 }

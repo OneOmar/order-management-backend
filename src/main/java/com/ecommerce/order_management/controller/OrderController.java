@@ -56,7 +56,8 @@ public class OrderController {
     public ResponseEntity<Page<OrderResponseDTO>> myOrders(
             Authentication authentication,
             @RequestParam(defaultValue = "0") int page,
-            @RequestParam(defaultValue = "5") int size
+            @RequestParam(defaultValue = "5") int size,
+            @RequestParam(required = false) String status
     ) {
         String email = authentication.getName();
         User user = userService.findByEmail(email);
@@ -67,9 +68,17 @@ public class OrderController {
                 Sort.by("createdAt").descending()
         );
 
-        Page<OrderResponseDTO> orders = orderService
-                .findByUserId(user.getId(), pageable)
-                .map(OrderMapper::toDTO);
+        Page<OrderResponseDTO> orders;
+
+        if (status != null) {
+            orders = orderService
+                    .findByUserIdAndStatus(user.getId(), status, pageable)
+                    .map(OrderMapper::toDTO);
+        } else {
+            orders = orderService
+                    .findByUserId(user.getId(), pageable)
+                    .map(OrderMapper::toDTO);
+        }
 
         return ResponseEntity.ok(orders);
     }

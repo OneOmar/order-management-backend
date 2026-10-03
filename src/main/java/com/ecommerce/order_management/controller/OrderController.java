@@ -1,12 +1,12 @@
 package com.ecommerce.order_management.controller;
 
-import com.ecommerce.order_management.dto.request.CreateOrderRequest;
-import com.ecommerce.order_management.dto.response.OrderItemDTO;
+import com.ecommerce.order_management.dto.request.OrderRequestDTO;
 import com.ecommerce.order_management.dto.response.OrderResponseDTO;
 import com.ecommerce.order_management.entity.Order;
 import com.ecommerce.order_management.entity.OrderItem;
 import com.ecommerce.order_management.entity.Product;
 import com.ecommerce.order_management.entity.User;
+import com.ecommerce.order_management.mapper.OrderMapper;
 import com.ecommerce.order_management.service.OrderService;
 import com.ecommerce.order_management.service.UserService;
 import jakarta.validation.Valid;
@@ -33,7 +33,7 @@ public class OrderController {
     @PostMapping
     public ResponseEntity<OrderResponseDTO> create(
             Authentication authentication,
-            @Valid @RequestBody CreateOrderRequest request
+            @Valid @RequestBody OrderRequestDTO request
     ) {
         String email = authentication.getName();
         User user = userService.findByEmail(email);
@@ -41,7 +41,7 @@ public class OrderController {
         Order order = mapToOrder(request);
         Order saved = orderService.createOrder(user.getId(), order);
 
-        return ResponseEntity.ok(map(saved));
+        return ResponseEntity.status(201).body(OrderMapper.toDTO(saved));
     }
 
     /**
@@ -56,7 +56,7 @@ public class OrderController {
 
         List<OrderResponseDTO> orders = orderService.findByUserId(user.getId())
                 .stream()
-                .map(this::map)
+                .map(OrderMapper::toDTO)
                 .toList();
 
         return ResponseEntity.ok(orders);
@@ -85,7 +85,7 @@ public class OrderController {
             throw new AccessDeniedException("Access denied");
         }
 
-        return ResponseEntity.ok(map(order));
+        return ResponseEntity.ok(OrderMapper.toDTO(order));
     }
 
     /**
@@ -115,38 +115,22 @@ public class OrderController {
         return ResponseEntity.noContent().build();
     }
 
-    // ================= DTO MAPPERS =================
+    /**
+     * Convertir un OrderRequestDTO en entité Order.
+     */
+    private Order mapToOrder(OrderRequestDTO req) {
 
-    private OrderResponseDTO map(Order order) {
-        return new OrderResponseDTO(
-                order.getId(),
-                order.getUser().getEmail(),
-                order.getTotalAmount(),
-                order.getStatus().name(),
-                order.getShippingAddress(),
-                order.getCreatedAt(),
-                order.getItems().stream().map(this::mapItem).toList()
-        );
-    }
-
-    private OrderItemDTO mapItem(OrderItem item) {
-        return new OrderItemDTO(
-                item.getProduct().getId(),
-                item.getProduct().getName(),
-                item.getQuantity(),
-                item.getUnitPrice()
-        );
-    }
-
-    private Order mapToOrder(CreateOrderRequest req) {
+        // Transformer les items du DTO en OrderItem (entity)
         List<OrderItem> items = req.items().stream()
-                .map(i -> OrderItem.builder()
-                        .product(Product.builder().id(i.productId()).build())
-                        .quantity(i.quantity())
-                        .build()
-                )
+                .map(item -> OrderItem.builder()
+                        .product(Product.builder()
+                                .id(item.productId())
+                                .build())
+                        .quantity(item.quantity())
+                        .build())
                 .toList();
 
+        // Construire l'entité Order
         return Order.builder()
                 .shippingAddress(req.shippingAddress())
                 .items(items)

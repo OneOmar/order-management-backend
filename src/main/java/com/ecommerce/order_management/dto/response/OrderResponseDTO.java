@@ -4,9 +4,6 @@ import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.util.List;
 
-/**
- * DTO pour exposer une commande
- */
 public record OrderResponseDTO(
 
         Long id,
@@ -15,7 +12,7 @@ public record OrderResponseDTO(
         String status,
         String shippingAddress,
         LocalDateTime createdAt,
-
         List<OrderItemDTO> items
 
-) {}
+) {
+}

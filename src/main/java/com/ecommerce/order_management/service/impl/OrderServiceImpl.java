@@ -14,14 +14,10 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
+import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.util.List;
 
-/**
- * Implémentation transactionnelle de OrderService.
- * - createOrder : vérifie le stock, décrémente, calcule total, persiste.
- * - cancelOrder : annule et restocke les items si applicable.
- * pour concurrence élevée, ajouter locking / optimistic @Version.
- */
 @Service
 @RequiredArgsConstructor
 @Transactional(readOnly = true)
@@ -33,26 +29,27 @@ public class OrderServiceImpl implements OrderService {
 
     /**
      * Créer une commande :
-     * - vérifie stock
-     * - calcule total
-     * - décrémente stock
+     * - valide les items
+     * - vérifie le stock
+     * - calcule le total
+     * - décrémente le stock
      */
     @Override
     @Transactional
     public Order createOrder(Long userId, Order orderRequest) {
 
-        // 1. récupérer user
+        // Associer l'utilisateur
         User user = userService.findById(userId);
         orderRequest.setUser(user);
 
-        // 2. valider items
+        // Validation des items
         if (orderRequest.getItems() == null || orderRequest.getItems().isEmpty()) {
             throw new IllegalArgumentException("La commande doit contenir au moins un article");
         }
 
         BigDecimal total = BigDecimal.ZERO;
 
-        // 3. traiter chaque item
+        // Traitement de chaque item
         for (OrderItem item : orderRequest.getItems()) {
 
             Long productId = item.getProduct() != null ? item.getProduct().getId() : null;
@@ -67,34 +64,34 @@ public class OrderServiceImpl implements OrderService {
                 throw new IllegalArgumentException("Quantité invalide");
             }
 
-            // check stock
+            // Vérifier stock
             if (product.getStock() < qty) {
                 throw new InsufficientStockException("Stock insuffisant pour produit id=" + productId);
             }
 
-            // set données sécurisées
+            // Sécuriser les données côté serveur
             item.setProduct(product);
             item.setUnitPrice(product.getPrice());
             item.setOrder(orderRequest);
 
-            // décrémenter stock
+            // Décrémenter stock
             productService.decreaseStock(productId, qty);
 
-            // calcul total
+            // Calcul total ligne
             BigDecimal lineTotal = product.getPrice().multiply(BigDecimal.valueOf(qty));
             total = total.add(lineTotal);
         }
 
-        // 4. set order fields
+        // Finaliser commande
         orderRequest.setTotalAmount(total);
         orderRequest.setStatus(OrderStatus.PENDING);
 
-        // 5. save (cascade pour items)
+        // Persistance (cascade items)
         return orderRepository.save(orderRequest);
     }
 
     /**
-     * Récupérer une commande
+     * Récupérer une commande par ID
      */
     @Override
     public Order findById(Long id) {
@@ -103,18 +100,21 @@ public class OrderServiceImpl implements OrderService {
     }
 
     /**
-     * Commandes d’un user
+     * Commandes paginées d’un utilisateur
      */
     @Override
     public Page<Order> findByUserId(Long userId, Pageable pageable) {
         return orderRepository.findByUserId(userId, pageable);
     }
 
+    /**
+     * Filtrer par statut
+     */
     @Override
     public Page<Order> findByUserIdAndStatus(Long userId, String status, Pageable pageable) {
 
+        // Convertir String → Enum
         OrderStatus orderStatus;
-
         try {
             orderStatus = OrderStatus.valueOf(status.toUpperCase());
         } catch (Exception e) {
@@ -125,7 +125,86 @@ public class OrderServiceImpl implements OrderService {
     }
 
     /**
-     * Commandes par statut
+     * Filtrer par intervalle de dates
+     */
+    @Override
+    public Page<Order> findByUserIdAndDateRange(
+            Long userId,
+            String startDate,
+            String endDate,
+            Pageable pageable
+    ) {
+
+        LocalDateTime start;
+        LocalDateTime end;
+
+        try {
+            // Début de journée / fin de journée
+            start = LocalDate.parse(startDate).atStartOfDay();
+            end = LocalDate.parse(endDate).atTime(23, 59, 59);
+        } catch (Exception e) {
+            throw new IllegalArgumentException("Format de date invalide (yyyy-MM-dd)");
+        }
+
+        // Validation métier
+        if (start.isAfter(end)) {
+            throw new IllegalArgumentException("startDate doit être avant endDate");
+        }
+
+        return orderRepository.findByUserIdAndCreatedAtBetween(
+                userId,
+                start,
+                end,
+                pageable
+        );
+    }
+
+    /**
+     * Filtrer par statut + intervalle de dates
+     */
+    @Override
+    public Page<Order> findByUserIdAndStatusAndDateRange(
+            Long userId,
+            String status,
+            String startDate,
+            String endDate,
+            Pageable pageable
+    ) {
+
+        // Conversion status
+        OrderStatus orderStatus;
+        try {
+            orderStatus = OrderStatus.valueOf(status.toUpperCase());
+        } catch (Exception e) {
+            throw new IllegalArgumentException("Statut invalide: " + status);
+        }
+
+        LocalDateTime start;
+        LocalDateTime end;
+
+        try {
+            start = LocalDate.parse(startDate).atStartOfDay();
+            end = LocalDate.parse(endDate).atTime(23, 59, 59);
+        } catch (Exception e) {
+            throw new IllegalArgumentException("Format de date invalide (yyyy-MM-dd)");
+        }
+
+        // Validation intervalle
+        if (start.isAfter(end)) {
+            throw new IllegalArgumentException("startDate doit être avant endDate");
+        }
+
+        return orderRepository.findByUserIdAndStatusAndCreatedAtBetween(
+                userId,
+                orderStatus,
+                start,
+                end,
+                pageable
+        );
+    }
+
+    /**
+     * Commandes par statut (non paginé)
      */
     @Override
     public List<Order> findByStatus(OrderStatus status) {
@@ -146,7 +225,7 @@ public class OrderServiceImpl implements OrderService {
     /**
      * Annuler une commande :
      * - interdit si DELIVERED
-     * - restock produits
+     * - restock les produits
      */
     @Override
     @Transactional
@@ -160,13 +239,13 @@ public class OrderServiceImpl implements OrderService {
             throw new IllegalArgumentException("Impossible d'annuler une commande livrée");
         }
 
-        // restock
+        // Restock produits
         for (OrderItem item : order.getItems()) {
+
             Product product = productService.findById(item.getProduct().getId());
-
             int qty = item.getQuantity() == null ? 0 : item.getQuantity();
-            product.setStock(product.getStock() + qty);
 
+            product.setStock(product.getStock() + qty);
             productService.save(product);
         }
 

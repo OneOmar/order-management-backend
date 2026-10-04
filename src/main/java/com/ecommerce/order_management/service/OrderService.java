@@ -28,5 +28,20 @@ public interface OrderService {
 
     Order updateStatus(Long orderId, OrderStatus newStatus);
 
+    Page<Order> findByUserIdAndDateRange(
+            Long userId,
+            String startDate,
+            String endDate,
+            Pageable pageable
+    );
+
+    Page<Order> findByUserIdAndStatusAndDateRange(
+            Long userId,
+            String status,
+            String startDate,
+            String endDate,
+            Pageable pageable
+    );
+
     void cancelOrder(Long orderId);
 }

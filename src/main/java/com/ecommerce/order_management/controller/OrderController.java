@@ -31,37 +31,44 @@ public class OrderController {
     private final UserService userService;
 
     /**
-     * USER connecté
-     * Créer une commande
+     * Créer une commande pour l'utilisateur connecté
      */
     @PostMapping
     public ResponseEntity<OrderResponseDTO> create(
             Authentication authentication,
             @Valid @RequestBody OrderRequestDTO request
     ) {
+        // récupérer user connecté
         String email = authentication.getName();
         User user = userService.findByEmail(email);
 
+        // mapper DTO -> entity
         Order order = mapToOrder(request);
+
+        // créer commande
         Order saved = orderService.createOrder(user.getId(), order);
 
+        // retourner réponse (201 CREATED)
         return ResponseEntity.status(201).body(OrderMapper.toDTO(saved));
     }
 
     /**
-     * USER connecté
-     * Récupérer ses commandes
+     * Récupérer les commandes du user avec pagination + filtres optionnels
      */
     @GetMapping("/me")
     public ResponseEntity<Page<OrderResponseDTO>> myOrders(
             Authentication authentication,
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "5") int size,
-            @RequestParam(required = false) String status
+            @RequestParam(required = false) String status,
+            @RequestParam(required = false) String startDate,
+            @RequestParam(required = false) String endDate
     ) {
+        // récupérer user connecté
         String email = authentication.getName();
         User user = userService.findByEmail(email);
 
+        // pagination + tri par date desc
         Pageable pageable = PageRequest.of(
                 page,
                 size,
@@ -70,11 +77,44 @@ public class OrderController {
 
         Page<OrderResponseDTO> orders;
 
-        if (status != null) {
+        // CAS 1 : filtre complet (status + date range)
+        if (status != null && startDate != null && endDate != null) {
+
+            orders = orderService
+                    .findByUserIdAndStatusAndDateRange(
+                            user.getId(),
+                            status,
+                            startDate,
+                            endDate,
+                            pageable
+                    )
+                    .map(OrderMapper::toDTO);
+        }
+
+        // CAS 2 : filtre date uniquement
+        else if (startDate != null && endDate != null) {
+
+            orders = orderService
+                    .findByUserIdAndDateRange(
+                            user.getId(),
+                            startDate,
+                            endDate,
+                            pageable
+                    )
+                    .map(OrderMapper::toDTO);
+        }
+
+        // CAS 3 : filtre status uniquement
+        else if (status != null) {
+
             orders = orderService
                     .findByUserIdAndStatus(user.getId(), status, pageable)
                     .map(OrderMapper::toDTO);
-        } else {
+        }
+
+        // CAS 4 : aucun filtre
+        else {
+
             orders = orderService
                     .findByUserId(user.getId(), pageable)
                     .map(OrderMapper::toDTO);
@@ -84,52 +124,33 @@ public class OrderController {
     }
 
     /**
-     * USER ou ADMIN
-     * Récupérer une commande par ID (sécurisé)
+     * Récupérer une commande par ID (OWNER ou ADMIN)
      */
     @GetMapping("/{id}")
     public ResponseEntity<OrderResponseDTO> getById(
             @PathVariable Long id,
             Authentication authentication
     ) {
-
         Order order = orderService.findById(id);
 
-        String email = authentication.getName();
-        User currentUser = userService.findByEmail(email);
-
-        boolean isOwner = order.getUser().getId().equals(currentUser.getId());
-        boolean isAdmin = currentUser.getRole().name().equals("ROLE_ADMIN");
-
-        // FIXED condition
-        if (!(isOwner || isAdmin)) {
-            throw new AccessDeniedException("Access denied");
-        }
+        // check accès
+        checkAccess(order, authentication);
 
         return ResponseEntity.ok(OrderMapper.toDTO(order));
     }
 
     /**
-     * USER ou ADMIN
-     * Annuler une commande
+     * Annuler une commande (OWNER ou ADMIN)
      */
     @PatchMapping("/{id}/cancel")
     public ResponseEntity<Void> cancel(
             @PathVariable Long id,
             Authentication authentication
     ) {
-
         Order order = orderService.findById(id);
 
-        String email = authentication.getName();
-        User currentUser = userService.findByEmail(email);
-
-        boolean isOwner = order.getUser().getId().equals(currentUser.getId());
-        boolean isAdmin = currentUser.getRole().name().equals("ROLE_ADMIN");
-
-        if (!(isOwner || isAdmin)) {
-            throw new AccessDeniedException("Access denied");
-        }
+        // check accès
+        checkAccess(order, authentication);
 
         orderService.cancelOrder(id);
 
@@ -137,21 +158,36 @@ public class OrderController {
     }
 
     /**
-     * Convertir un OrderRequestDTO en entité Order.
+     * Vérifie que l'utilisateur est OWNER ou ADMIN
+     */
+    private void checkAccess(Order order, Authentication auth) {
+        String email = auth.getName();
+        User user = userService.findByEmail(email);
+
+        boolean isOwner = order.getUser().getId().equals(user.getId());
+        boolean isAdmin = user.getRole().name().equals("ROLE_ADMIN");
+
+        if (!(isOwner || isAdmin)) {
+            throw new AccessDeniedException("Access denied");
+        }
+    }
+
+    /**
+     * Convertir un OrderRequestDTO -> Order (entity)
      */
     private Order mapToOrder(OrderRequestDTO req) {
 
-        // Transformer les items du DTO en OrderItem (entity)
+        // mapper items DTO -> entity
         List<OrderItem> items = req.items().stream()
                 .map(item -> OrderItem.builder()
                         .product(Product.builder()
-                                .id(item.productId())
+                                .id(item.productId()) // seulement ID
                                 .build())
                         .quantity(item.quantity())
                         .build())
                 .toList();
 
-        // Construire l'entité Order
+        // construire order
         return Order.builder()
                 .shippingAddress(req.shippingAddress())
                 .items(items)

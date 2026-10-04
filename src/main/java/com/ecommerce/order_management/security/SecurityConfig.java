@@ -19,59 +19,59 @@ import org.springframework.security.web.authentication.UsernamePasswordAuthentic
 @EnableMethodSecurity
 public class SecurityConfig {
 
-  // filtre JWT (vérifie le token à chaque requête)
-  private final JwtAuthFilter jwtAuthFilter;
+    // filtre JWT (vérifie le token à chaque requête)
+    private final JwtAuthFilter jwtAuthFilter;
 
-  public SecurityConfig(JwtAuthFilter jwtAuthFilter) {
-    this.jwtAuthFilter = jwtAuthFilter;
-  }
+    public SecurityConfig(JwtAuthFilter jwtAuthFilter) {
+        this.jwtAuthFilter = jwtAuthFilter;
+    }
 
-  @Bean
-  public SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
+    @Bean
+    public SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
 
-    http
-        // Désactive CSRF (API REST stateless)
-        .csrf(csrf -> csrf.disable())
+        http
+                // Désactive CSRF (API REST stateless)
+                .csrf(csrf -> csrf.disable())
 
-        // Gestion des accès
-        .authorizeHttpRequests(auth -> auth
-            // PUBLIC
-            .requestMatchers("/api/v1/auth/**").permitAll()
-            .requestMatchers("/actuator/**").permitAll()
-            .requestMatchers("/swagger-ui/**").permitAll()
-            .requestMatchers("/v3/api-docs/**").permitAll()
-            // SECURED
-            .anyRequest().authenticated()
-        )
+                // Gestion des accès
+                .authorizeHttpRequests(auth -> auth
+                        // PUBLIC
+                        .requestMatchers("/api/v1/auth/**").permitAll()
+                        .requestMatchers("/actuator/**").permitAll()
+                        .requestMatchers("/swagger-ui/**").permitAll()
+                        .requestMatchers("/v3/api-docs/**").permitAll()
+                        // SECURED
+                        .anyRequest().authenticated()
+                )
 
-        // Pas de session (JWT only)
-        .sessionManagement(session ->
-            session.sessionCreationPolicy(SessionCreationPolicy.STATELESS)
-        )
+                // Pas de session (JWT only)
+                .sessionManagement(session ->
+                        session.sessionCreationPolicy(SessionCreationPolicy.STATELESS)
+                )
 
-        // Force 401 au lieu de 403 si non authentifié
-        .exceptionHandling(exception -> exception
-            .authenticationEntryPoint((request,
-                                       response,
-                                       authException) -> {
-              response.sendError(HttpServletResponse.SC_UNAUTHORIZED, "Unauthorized");
-            })
-        )
+                // Force 401 au lieu de 403 si non authentifié
+                .exceptionHandling(exception -> exception
+                        .authenticationEntryPoint((request,
+                                                   response,
+                                                   authException) -> {
+                            response.sendError(HttpServletResponse.SC_UNAUTHORIZED, "Unauthorized");
+                        })
+                )
 
-        // Ajoute le filtre JWT avant Spring Security
-        .addFilterBefore(jwtAuthFilter, UsernamePasswordAuthenticationFilter.class);
+                // Ajoute le filtre JWT avant Spring Security
+                .addFilterBefore(jwtAuthFilter, UsernamePasswordAuthenticationFilter.class);
 
-    return http.build();
-  }
+        return http.build();
+    }
 
-  @Bean
-  public AuthenticationManager authenticationManager(AuthenticationConfiguration config) throws Exception {
-    return config.getAuthenticationManager();
-  }
+    @Bean
+    public AuthenticationManager authenticationManager(AuthenticationConfiguration config) throws Exception {
+        return config.getAuthenticationManager();
+    }
 
-  // encode les mots de passe (obligatoire pour sécurité)
-  @Bean
-  public PasswordEncoder passwordEncoder() {
-    return new BCryptPasswordEncoder();
-  }
+    // encode les mots de passe (obligatoire pour sécurité)
+    @Bean
+    public PasswordEncoder passwordEncoder() {
+        return new BCryptPasswordEncoder();
+    }
 }

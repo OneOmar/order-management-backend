@@ -16,7 +16,7 @@ import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
 import org.springframework.http.ResponseEntity;
-import org.springframework.security.access.AccessDeniedException;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
 
@@ -38,22 +38,17 @@ public class OrderController {
             Authentication authentication,
             @Valid @RequestBody OrderRequestDTO request
     ) {
-        // récupérer user connecté
         String email = authentication.getName();
         User user = userService.findByEmail(email);
 
-        // mapper DTO -> entity
         Order order = mapToOrder(request);
-
-        // créer commande
         Order saved = orderService.createOrder(user.getId(), order);
 
-        // retourner réponse (201 CREATED)
         return ResponseEntity.status(201).body(OrderMapper.toDTO(saved));
     }
 
     /**
-     * Récupérer les commandes du user avec pagination + filtres optionnels
+     * Récupérer les commandes du user (pagination + filtres)
      */
     @GetMapping("/me")
     public ResponseEntity<Page<OrderResponseDTO>> myOrders(
@@ -64,11 +59,9 @@ public class OrderController {
             @RequestParam(required = false) String startDate,
             @RequestParam(required = false) String endDate
     ) {
-        // récupérer user connecté
         String email = authentication.getName();
         User user = userService.findByEmail(email);
 
-        // pagination + tri par date desc
         Pageable pageable = PageRequest.of(
                 page,
                 size,
@@ -77,44 +70,26 @@ public class OrderController {
 
         Page<OrderResponseDTO> orders;
 
-        // CAS 1 : filtre complet (status + date range)
+        // status + date
         if (status != null && startDate != null && endDate != null) {
-
             orders = orderService
-                    .findByUserIdAndStatusAndDateRange(
-                            user.getId(),
-                            status,
-                            startDate,
-                            endDate,
-                            pageable
-                    )
+                    .findByUserIdAndStatusAndDateRange(user.getId(), status, startDate, endDate, pageable)
                     .map(OrderMapper::toDTO);
         }
-
-        // CAS 2 : filtre date uniquement
+        // date only
         else if (startDate != null && endDate != null) {
-
             orders = orderService
-                    .findByUserIdAndDateRange(
-                            user.getId(),
-                            startDate,
-                            endDate,
-                            pageable
-                    )
+                    .findByUserIdAndDateRange(user.getId(), startDate, endDate, pageable)
                     .map(OrderMapper::toDTO);
         }
-
-        // CAS 3 : filtre status uniquement
+        // status only
         else if (status != null) {
-
             orders = orderService
                     .findByUserIdAndStatus(user.getId(), status, pageable)
                     .map(OrderMapper::toDTO);
         }
-
-        // CAS 4 : aucun filtre
+        // no filter
         else {
-
             orders = orderService
                     .findByUserId(user.getId(), pageable)
                     .map(OrderMapper::toDTO);
@@ -124,70 +99,43 @@ public class OrderController {
     }
 
     /**
-     * Récupérer une commande par ID (OWNER ou ADMIN)
+     * Récupérer une commande (OWNER ou ADMIN)
+     * sécurité externalisée via OrderSecurity
      */
+    @PreAuthorize("@orderSecurity.isOwnerOrAdmin(#id, authentication)")
     @GetMapping("/{id}")
-    public ResponseEntity<OrderResponseDTO> getById(
-            @PathVariable Long id,
-            Authentication authentication
-    ) {
+    public ResponseEntity<OrderResponseDTO> getById(@PathVariable Long id) {
+
         Order order = orderService.findById(id);
-
-        // check accès
-        checkAccess(order, authentication);
-
         return ResponseEntity.ok(OrderMapper.toDTO(order));
     }
 
     /**
      * Annuler une commande (OWNER ou ADMIN)
      */
+    @PreAuthorize("@orderSecurity.isOwnerOrAdmin(#id, authentication)")
     @PatchMapping("/{id}/cancel")
-    public ResponseEntity<Void> cancel(
-            @PathVariable Long id,
-            Authentication authentication
-    ) {
-        Order order = orderService.findById(id);
-
-        // check accès
-        checkAccess(order, authentication);
+    public ResponseEntity<Void> cancel(@PathVariable Long id) {
 
         orderService.cancelOrder(id);
-
         return ResponseEntity.noContent().build();
     }
 
     /**
-     * Vérifie que l'utilisateur est OWNER ou ADMIN
-     */
-    private void checkAccess(Order order, Authentication auth) {
-        String email = auth.getName();
-        User user = userService.findByEmail(email);
-
-        boolean isOwner = order.getUser().getId().equals(user.getId());
-        boolean isAdmin = user.getRole().name().equals("ROLE_ADMIN");
-
-        if (!(isOwner || isAdmin)) {
-            throw new AccessDeniedException("Access denied");
-        }
-    }
-
-    /**
-     * Convertir un OrderRequestDTO -> Order (entity)
+     * Mapper DTO -> Entity
+     * uniquement les champs nécessaires (ID produit + qty)
      */
     private Order mapToOrder(OrderRequestDTO req) {
 
-        // mapper items DTO -> entity
         List<OrderItem> items = req.items().stream()
                 .map(item -> OrderItem.builder()
                         .product(Product.builder()
-                                .id(item.productId()) // seulement ID
+                                .id(item.productId()) // only ID (fetch later in service)
                                 .build())
                         .quantity(item.quantity())
                         .build())
                 .toList();
 
-        // construire order
         return Order.builder()
                 .shippingAddress(req.shippingAddress())
                 .items(items)

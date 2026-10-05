@@ -10,7 +10,7 @@ pipeline {
         stage('Docker Deploy') {
             steps {
                 sh 'docker-compose down'
-                sh 'docker-compose up -d --build'
+                sh 'IMAGE_TAG=${IMAGE_TAG} docker-compose up -d --build'
             }
         }
 

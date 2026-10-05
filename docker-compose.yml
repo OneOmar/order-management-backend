@@ -18,13 +18,14 @@ services:
 
     # Healthcheck → vérifie que PostgreSQL est prêt
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER}"]
+      test: [ "CMD-SHELL", "pg_isready -U ${POSTGRES_USER}" ]
       interval: 5s       # test toutes les 5s
       timeout: 5s        # timeout du test
       retries: 5         # nombre d'essais
 
   app:
     build: .
+    image: order-app:${IMAGE_TAG}
     container_name: order-app
 
     # attend que la DB soit HEALTHY

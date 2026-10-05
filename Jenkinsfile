@@ -2,11 +2,13 @@ pipeline {
     agent any
 
     stages {
-        stage('Build') {
+
+        stage('Docker Deploy') {
             steps {
-                sh 'chmod +x mvnw'
-                sh './mvnw clean package -DskipTests'
+                sh 'docker-compose down'
+                sh 'docker-compose up -d --build'
             }
         }
+
     }
 }

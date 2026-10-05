@@ -2,13 +2,14 @@ package com.ecommerce.order_management.security;
 
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
+import jakarta.servlet.http.Cookie;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
+import lombok.RequiredArgsConstructor;
 import org.springframework.lang.NonNull;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.core.userdetails.UserDetails;
-import org.springframework.security.core.userdetails.UserDetailsService;
 import org.springframework.stereotype.Component;
 import org.springframework.web.filter.OncePerRequestFilter;
 
@@ -16,20 +17,16 @@ import java.io.IOException;
 
 /**
  * JwtAuthFilter :
- * - lit le header Authorization
- * - valide le JWT
- * - injecte l'utilisateur dans le SecurityContext
+ * - lit token depuis HEADER ou COOKIE
+ * - valide JWT
+ * - injecte user dans SecurityContext
  */
 @Component
+@RequiredArgsConstructor
 public class JwtAuthFilter extends OncePerRequestFilter {
 
     private final JwtUtil jwtUtil;
     private final CustomUserDetailsService userDetailsService;
-
-    public JwtAuthFilter(JwtUtil jwtUtil, CustomUserDetailsService userDetailsService) {
-        this.jwtUtil = jwtUtil;
-        this.userDetailsService = userDetailsService;
-    }
 
     @Override
     protected void doFilterInternal(
@@ -38,33 +35,28 @@ public class JwtAuthFilter extends OncePerRequestFilter {
             @NonNull FilterChain filterChain
     ) throws ServletException, IOException {
 
-        // 1) Lire le header Authorization
-        String authHeader = request.getHeader("Authorization");
+        String token = extractToken(request);
 
-        // Pas de token → continuer sans auth
-        if (authHeader == null || !authHeader.startsWith("Bearer ")) {
+        // pas de token → continuer
+        if (token == null) {
             filterChain.doFilter(request, response);
             return;
         }
 
-        // 2) Extraire le token
-        String token = authHeader.substring(7).trim();
         String username;
 
         try {
             username = jwtUtil.extractUsername(token);
         } catch (Exception e) {
-            // Token invalide → ignorer et continuer
             filterChain.doFilter(request, response);
             return;
         }
 
-        // 3) Authentification si pas déjà faite
+        // authentification
         if (username != null && SecurityContextHolder.getContext().getAuthentication() == null) {
 
             UserDetails userDetails = userDetailsService.loadUserByUsername(username);
 
-            // Vérifier token
             if (jwtUtil.isTokenValid(token, userDetails)) {
 
                 UsernamePasswordAuthenticationToken authToken =
@@ -74,12 +66,35 @@ public class JwtAuthFilter extends OncePerRequestFilter {
                                 userDetails.getAuthorities()
                         );
 
-                // Injecter dans le contexte de sécurité
                 SecurityContextHolder.getContext().setAuthentication(authToken);
             }
         }
 
-        // 4) Continuer la requête
         filterChain.doFilter(request, response);
+    }
+
+    /**
+     * Extract token from:
+     * 1. Authorization header
+     * 2. Cookie (access_token)
+     */
+    private String extractToken(HttpServletRequest request) {
+
+        // HEADER (priority)
+        String authHeader = request.getHeader("Authorization");
+        if (authHeader != null && authHeader.startsWith("Bearer ")) {
+            return authHeader.substring(7).trim();
+        }
+
+        // COOKIE
+        if (request.getCookies() != null) {
+            for (Cookie cookie : request.getCookies()) {
+                if ("access_token".equals(cookie.getName())) {
+                    return cookie.getValue();
+                }
+            }
+        }
+
+        return null;
     }
 }

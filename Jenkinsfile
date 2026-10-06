@@ -42,13 +42,11 @@ pipeline {
     }
 
    post {
-
        success {
            emailext(
-               to: "elmanssouriomar@gmail.com",
-               subject: "TEST EMAIL",
-               body: "If you see this → emailext works",
-               mimeType: 'text/plain'
+               to: 'elmanssouriomar@gmail.com',
+               subject: 'TEST SIMPLE',
+               body: 'hello'
            )
        }
    }

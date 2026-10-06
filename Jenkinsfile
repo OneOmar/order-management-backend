@@ -45,8 +45,28 @@ pipeline {
        success {
            emailext(
                to: 'elmanssouriomar@gmail.com',
-               subject: 'TEST SIMPLE',
-               body: 'hello'
+               subject: "✅ SUCCESS: ${env.JOB_NAME} #${env.BUILD_NUMBER}",
+               body: """
+               Deployment successful!
+
+               Job: ${env.JOB_NAME}
+               Build: #${env.BUILD_NUMBER}
+               URL: ${env.BUILD_URL}
+               """
+           )
+       }
+
+       failure {
+           emailext(
+               to: 'elmanssouriomar@gmail.com',
+               subject: "❌ FAILED: ${env.JOB_NAME} #${env.BUILD_NUMBER}",
+               body: """
+               Deployment failed!
+
+               Job: ${env.JOB_NAME}
+               Build: #${env.BUILD_NUMBER}
+               URL: ${env.BUILD_URL}
+               """
            )
        }
    }

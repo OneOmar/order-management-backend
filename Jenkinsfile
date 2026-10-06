@@ -40,4 +40,32 @@ pipeline {
         }
 
     }
+
+    post {
+
+        // Triggered when pipeline fails
+        failure {
+            emailext(
+                subject: "❌ FAILED: ${env.JOB_NAME} #${env.BUILD_NUMBER}",
+                body: """
+                Build failed ❌
+
+                Job: ${env.JOB_NAME}
+                Build: #${env.BUILD_NUMBER}
+                URL: ${env.BUILD_URL}
+                """,
+                to: "elmanssouriomar@gmail.com"
+            )
+        }
+
+        // Triggered when pipeline succeeds
+        success {
+            emailext(
+                subject: "✅ SUCCESS: ${env.JOB_NAME} #${env.BUILD_NUMBER}",
+                body: "Deployment successful!",
+                to: "elmanssouriomar@gmail.com"
+            )
+        }
+    }
+
 }

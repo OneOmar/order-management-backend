@@ -1,20 +1,27 @@
 pipeline {
     agent any
 
+    // Allow manual rollback (optional)
+    parameters {
+        string(name: 'IMAGE_TAG', defaultValue: '', description: 'ex: build-7 (leave empty = latest build)')
+    }
+
     environment {
-        IMAGE_TAG = "build-${BUILD_NUMBER}"
+        // If param empty → use current build
+        IMAGE_TAG = "${params.IMAGE_TAG ?: "build-${BUILD_NUMBER}"}"
     }
 
     stages {
 
         stage('Docker Deploy') {
             steps {
-                sh 'echo IMAGE_TAG=${IMAGE_TAG}'
+                // Show version used
+                sh 'echo Deploying IMAGE_TAG=${IMAGE_TAG}'
 
-                // CLEAN ancien déploiement
+                // Clean previous deployment
                 sh 'docker compose down --remove-orphans || true'
 
-                // nouveau déploiement
+                // Deploy selected version
                 sh 'IMAGE_TAG=${IMAGE_TAG} docker compose up -d --build'
             }
         }

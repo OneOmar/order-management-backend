@@ -7,7 +7,7 @@ pipeline {
     }
 
     environment {
-        // If param empty → use current build
+        // If param is empty → use current build number
         IMAGE_TAG = "${params.IMAGE_TAG ?: "build-${BUILD_NUMBER}"}"
     }
 
@@ -15,14 +15,27 @@ pipeline {
 
         stage('Docker Deploy') {
             steps {
-                // Show version used
+                // Display which version is being deployed
                 sh 'echo Deploying IMAGE_TAG=${IMAGE_TAG}'
 
-                // Clean previous deployment
+                // Stop and remove previous containers (ignore errors if none exist)
                 sh 'docker compose down --remove-orphans || true'
 
-                // Deploy selected version
+                // Build and start containers with selected version
                 sh 'IMAGE_TAG=${IMAGE_TAG} docker compose up -d --build'
+            }
+        }
+
+        stage('Health Check') {
+            steps {
+                sh '''
+                # Wait a bit for the app to start
+                echo "Waiting for application to be ready..."
+                sleep 10
+
+                # Call health endpoint
+                curl -f http://localhost:8081/actuator/health
+                '''
             }
         }
 

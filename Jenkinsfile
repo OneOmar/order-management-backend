@@ -54,7 +54,8 @@ pipeline {
                 Build: #${env.BUILD_NUMBER}
                 URL: ${env.BUILD_URL}
                 """,
-                to: "elmanssouriomar@gmail.com"
+                to: "elmanssouriomar@gmail.com",
+                from: "elmanssouriomar@gmail.com"
             )
         }
 
@@ -63,7 +64,8 @@ pipeline {
             emailext(
                 subject: "✅ SUCCESS: ${env.JOB_NAME} #${env.BUILD_NUMBER}",
                 body: "Deployment successful!",
-                to: "elmanssouriomar@gmail.com"
+                to: "elmanssouriomar@gmail.com",
+                from: "elmanssouriomar@gmail.com"
             )
         }
     }

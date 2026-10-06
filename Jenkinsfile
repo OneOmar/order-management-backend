@@ -29,20 +29,9 @@ pipeline {
         stage('Health Check') {
             steps {
                 sh '''
-                echo "Waiting for application to be ready..."
-
-                for i in {1..12}; do
-                    if curl -sf http://localhost:8081/actuator/health; then
-                        echo "Application is healthy!"
-                        exit 0
-                    fi
-
-                    echo "Application not ready yet... retry $i/12"
-                    sleep 5
-                done
-
-                echo "Application failed health check."
-                exit 1
+                echo "Waiting for application..."
+                sleep 30
+                curl -f http://localhost:8081/actuator/health
                 '''
             }
         }

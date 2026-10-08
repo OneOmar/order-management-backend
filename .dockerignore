@@ -1,5 +1,6 @@
-# le build local
-target/
+# le build local (sauf le jar copié dans l'image)
+target/*
+!target/*.jar
 
 # Git
 .git

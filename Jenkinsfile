@@ -3,36 +3,102 @@ pipeline {
 
     // Allow manual rollback (optional)
     parameters {
-        string(name: 'IMAGE_TAG', defaultValue: '', description: 'ex: build-7 (leave empty = latest build)')
+        string(name: 'IMAGE_TAG', defaultValue: '', description: 'ex: build-7 (leave empty = build and deploy a new image)')
     }
 
     environment {
         // If param is empty → use current build number
-        IMAGE_TAG = "${params.IMAGE_TAG ?: "build-${BUILD_NUMBER}"}"
+        IMAGE_TAG  = "${params.IMAGE_TAG ?: "build-${BUILD_NUMBER}"}"
+        HEALTH_URL = 'http://localhost:8081/actuator/health'
+    }
+
+    options {
+        skipDefaultCheckout()
+        timeout(time: 30, unit: 'MINUTES')
+        disableConcurrentBuilds()
+        buildDiscarder(logRotator(numToKeepStr: '20'))
     }
 
     stages {
 
-        stage('Docker Deploy') {
+        stage('Checkout') {
             steps {
-                // Display which version is being deployed
-                sh 'echo Deploying IMAGE_TAG=${IMAGE_TAG}'
+                checkout scm
+                sh 'git log -1 --oneline'
+            }
+        }
 
-                // Stop and remove previous containers (ignore errors if none exist)
+        stage('Prepare') {
+            steps {
+                script {
+                    def mode = params.IMAGE_TAG ? 'ROLLBACK' : 'NEW BUILD'
+                    currentBuild.displayName = "#${BUILD_NUMBER} ${env.IMAGE_TAG}"
+                    currentBuild.description = mode
+                    echo "Mode: ${mode} | IMAGE_TAG=${env.IMAGE_TAG}"
+                }
+
+                // docker-compose.yml needs the .env file (DB credentials, JWT secret)
+                sh '''
+                    if [ ! -f .env ]; then
+                        echo "ERROR: .env file is missing in the workspace"
+                        exit 1
+                    fi
+                    docker --version
+                    docker compose version
+                '''
+            }
+        }
+
+        stage('Build') {
+            // Skip on rollback: we redeploy an existing image
+            when {
+                expression { !params.IMAGE_TAG }
+            }
+            steps {
+                // mvnw is not executable in git
+                sh 'chmod +x mvnw'
+                sh './mvnw -B clean package -DskipTests'
+            }
+        }
+
+        // TODO: add 'SonarQube Analysis' stage here (needs target/classes from Build)
+
+        stage('Docker Build') {
+            // Skip on rollback: the image already exists
+            when {
+                expression { !params.IMAGE_TAG }
+            }
+            steps {
+                sh 'docker compose build app'
+            }
+        }
+
+        stage('Stop Previous Containers') {
+            steps {
+                // Ignore errors if no containers exist
                 sh 'docker compose down --remove-orphans || true'
+            }
+        }
 
-                // Build and start containers with selected version
-                sh 'IMAGE_TAG=${IMAGE_TAG} docker compose up -d --build'
+        stage('Deploy') {
+            steps {
+                sh 'docker compose up -d --no-build'
+                sh 'docker compose ps'
             }
         }
 
         stage('Health Check') {
             steps {
-                sh '''
-                echo "Waiting for application..."
-                sleep 30
-                curl -f http://localhost:8081/actuator/health
-                '''
+                echo "Waiting for application at ${HEALTH_URL}..."
+                // Retry until the app answers, fail after 2 minutes
+                timeout(time: 2, unit: 'MINUTES') {
+                    script {
+                        waitUntil {
+                            sh(script: 'curl -sf "$HEALTH_URL"', returnStatus: true) == 0
+                        }
+                    }
+                }
+                echo 'Application is healthy!'
             }
         }
 
@@ -49,12 +115,16 @@ pipeline {
 
                Job: ${env.JOB_NAME}
                Build: #${env.BUILD_NUMBER}
+               Image: order-app:${env.IMAGE_TAG}
                URL: ${env.BUILD_URL}
                """
            )
        }
 
        failure {
+           // Help debugging: show the last application logs
+           sh 'docker compose logs --tail=100 app || true'
+
            emailext(
                from: 'elmanssouriomar@gmail.com',
                to: 'elmanssouriomar@gmail.com',
@@ -64,6 +134,7 @@ pipeline {
 
                Job: ${env.JOB_NAME}
                Build: #${env.BUILD_NUMBER}
+               Image: order-app:${env.IMAGE_TAG}
                URL: ${env.BUILD_URL}
                """
            )

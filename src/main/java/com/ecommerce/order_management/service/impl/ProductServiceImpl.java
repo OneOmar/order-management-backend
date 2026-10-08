@@ -5,6 +5,7 @@ import com.ecommerce.order_management.exception.NotFoundException;
 import com.ecommerce.order_management.repository.ProductRepository;
 import com.ecommerce.order_management.service.ProductService;
 import lombok.RequiredArgsConstructor;
+import org.springframework.cache.annotation.Cacheable;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
@@ -34,6 +35,8 @@ public class ProductServiceImpl implements ProductService {
         return productRepository.findByCategoryAndActiveTrue(category, pageable);
     }
 
+    // Cache product by ID
+    @Cacheable("products")
     @Override
     public Product findById(Long id) {
         return productRepository.findById(id)

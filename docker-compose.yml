@@ -1,67 +1,73 @@
 services:
 
-  db:
-    image: postgres:15
-    container_name: order-db
-    restart: always
+    db:
+        image: postgres:15
+        container_name: order-db
+        restart: always
 
-    environment:
-      POSTGRES_DB: orderdb
-      POSTGRES_USER: ${POSTGRES_USER}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+        environment:
+            POSTGRES_DB: orderdb
+            POSTGRES_USER: ${POSTGRES_USER}
+            POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
 
-    ports:
-      - "5432:5432"
+        ports:
+            - "5432:5432"
 
-    volumes:
-      - postgres_data:/var/lib/postgresql/data
+        volumes:
+            - postgres_data:/var/lib/postgresql/data
 
-    # Healthcheck → vérifie que PostgreSQL est prêt
-    healthcheck:
-      test: [ "CMD-SHELL", "pg_isready -U ${POSTGRES_USER}" ]
-      interval: 5s       # test toutes les 5s
-      timeout: 5s        # timeout du test
-      retries: 5         # nombre d'essais
+        # Healthcheck → vérifie que PostgreSQL est prêt
+        healthcheck:
+            test: [ "CMD-SHELL", "pg_isready -U ${POSTGRES_USER}" ]
+            interval: 5s       # test toutes les 5s
+            timeout: 5s        # timeout du test
+            retries: 5         # nombre d'essais
 
-  app:
-    build: .
-    image: order-app:${IMAGE_TAG}
-    container_name: order-app
+    redis:
+        image: redis:7-alpine
+        container_name: redis
+        ports:
+            - "6379:6379"
 
-    # attend que la DB soit HEALTHY
-    depends_on:
-      db:
-        condition: service_healthy
+    app:
+        build: .
+        image: order-app:${IMAGE_TAG}
+        container_name: order-app
 
-    ports:
-      - "8081:8080"
+        # attend que la DB soit HEALTHY
+        depends_on:
+            db:
+                condition: service_healthy
 
-    env_file:
-      - .env
+        ports:
+            - "8081:8080"
 
-    environment:
-      SPRING_PROFILES_ACTIVE: prod
-      SPRING_DATASOURCE_URL: jdbc:postgresql://db:5432/orderdb
-      SPRING_DATASOURCE_USERNAME: ${POSTGRES_USER}
-      SPRING_DATASOURCE_PASSWORD: ${POSTGRES_PASSWORD}
-      JWT_SECRET: ${JWT_SECRET}
+        env_file:
+            - .env
 
-    # restart: always  # redémarre automatiquement si crash
+        environment:
+            SPRING_PROFILES_ACTIVE: prod
+            SPRING_DATASOURCE_URL: jdbc:postgresql://db:5432/orderdb
+            SPRING_DATASOURCE_USERNAME: ${POSTGRES_USER}
+            SPRING_DATASOURCE_PASSWORD: ${POSTGRES_PASSWORD}
+            JWT_SECRET: ${JWT_SECRET}
 
-  prometheus:
-    image: prom/prometheus:latest
-    container_name: prometheus
-    ports:
-      - "9090:9090"
-    volumes:
-      # Load Prometheus configuration
-      - ./prometheus.yml:/etc/prometheus/prometheus.yml
+        # restart: always  # redémarre automatiquement si crash
 
-  grafana:
-    image: grafana/grafana:latest
-    container_name: grafana
-    ports:
-      - "3000:3000"
+    prometheus:
+        image: prom/prometheus:latest
+        container_name: prometheus
+        ports:
+            - "9090:9090"
+        volumes:
+            # Load Prometheus configuration
+            - ./prometheus.yml:/etc/prometheus/prometheus.yml
+
+    grafana:
+        image: grafana/grafana:latest
+        container_name: grafana
+        ports:
+            - "3000:3000"
 
 volumes:
-  postgres_data:
+    postgres_data:

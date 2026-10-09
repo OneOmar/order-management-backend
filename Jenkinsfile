@@ -85,11 +85,13 @@ pipeline {
             steps {
                 // Wait up to 2 minutes for the application
                 timeout(time: 2, unit: 'MINUTES') {
-                    waitUntil {
-                        sh(
-                            script: 'curl -fsS http://localhost:8081/actuator/health',
-                            returnStatus: true
-                        ) == 0
+                    script {
+                        waitUntil {
+                            sh(
+                                script: 'curl -fsS http://localhost:8081/actuator/health',
+                                returnStatus: true
+                            ) == 0
+                        }
                     }
                 }
 
@@ -102,7 +104,6 @@ pipeline {
         success {
             emailext(
                 to: 'elmanssouriomar@gmail.com',
-                cc: 'chadad.mohamed@gmail.com',
                 subject: "SUCCESS: ${env.JOB_NAME} #${env.BUILD_NUMBER}",
                 body: """
                 Deployment successful!
@@ -119,7 +120,6 @@ pipeline {
 
             emailext(
                 to: 'elmanssouriomar@gmail.com',
-                cc: 'chadad.mohamed@gmail.com',
                 subject: "FAILED: ${env.JOB_NAME} #${env.BUILD_NUMBER}",
                 body: """
                 Deployment failed.

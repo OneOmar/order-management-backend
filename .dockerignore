@@ -1,5 +1,6 @@
-# le build local
-target/
+# Exclude build artifacts except the application JAR
+target/*
+!target/*.jar
 
 # Git
 .git

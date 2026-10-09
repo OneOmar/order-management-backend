@@ -1,73 +1,133 @@
 pipeline {
     agent any
 
-    // Allow manual rollback (optional)
     parameters {
-        string(name: 'IMAGE_TAG', defaultValue: '', description: 'ex: build-7 (leave empty = latest build)')
+        string(name: 'IMAGE_TAG', defaultValue: '', description: 'Image tag for rollback (e.g. build-7)')
     }
 
     environment {
-        // If param is empty → use current build number
         IMAGE_TAG = "${params.IMAGE_TAG ?: "build-${BUILD_NUMBER}"}"
     }
 
+    options {
+        skipDefaultCheckout()
+        timeout(time: 30, unit: 'MINUTES')
+        disableConcurrentBuilds()
+        buildDiscarder(logRotator(numToKeepStr: '20'))
+    }
+
     stages {
-
-        stage('Docker Deploy') {
+        stage('Checkout') {
             steps {
-                // Display which version is being deployed
-                sh 'echo Deploying IMAGE_TAG=${IMAGE_TAG}'
+                checkout scm
+                sh 'git log -1 --oneline'
+            }
+        }
 
-                // Stop and remove previous containers (ignore errors if none exist)
-                sh 'docker compose down --remove-orphans || true'
+        stage('Prepare') {
+            steps {
+                // Set deployment tag and mode
+                script {
+                    env.IMAGE_TAG = params.IMAGE_TAG?.trim() ?: "build-${BUILD_NUMBER}"
+                    currentBuild.displayName = "#${BUILD_NUMBER} ${env.IMAGE_TAG}"
+                    currentBuild.description = params.IMAGE_TAG?.trim() ? 'ROLLBACK' : 'NEW BUILD'
+                }
 
-                // Build and start containers with selected version
-                sh 'IMAGE_TAG=${IMAGE_TAG} docker compose up -d --build'
+                // Check required tools and configuration
+                sh '''
+                    test -f .env || { echo "Missing .env file"; exit 1; }
+                    docker --version
+                    docker compose version
+                '''
+            }
+        }
+
+        stage('Validate Rollback') {
+            when {
+                expression { params.IMAGE_TAG?.trim() }
+            }
+            steps {
+                // Ensure the requested image exists
+                sh 'docker image inspect "order-app:${IMAGE_TAG}" >/dev/null'
+            }
+        }
+
+        stage('Build') {
+            when {
+                expression { !params.IMAGE_TAG?.trim() }
+            }
+            steps {
+                // Build the application JAR
+                sh 'chmod +x mvnw'
+                sh './mvnw -B clean package -DskipTests'
+            }
+        }
+
+        stage('Docker Build') {
+            when {
+                expression { !params.IMAGE_TAG?.trim() }
+            }
+            steps {
+                // Build the tagged application image
+                sh 'IMAGE_TAG=${IMAGE_TAG} docker compose build app'
+            }
+        }
+
+        stage('Deploy') {
+            steps {
+                // Deploy only the application
+                sh 'IMAGE_TAG=${IMAGE_TAG} docker compose up -d --no-build --no-deps app'
+                sh 'docker compose ps app'
             }
         }
 
         stage('Health Check') {
             steps {
-                sh '''
-                echo "Waiting for application..."
-                sleep 30
-                curl -f http://localhost:8081/actuator/health
-                '''
+                // Wait up to 2 minutes for the application
+                timeout(time: 2, unit: 'MINUTES') {
+                    waitUntil {
+                        sh(
+                            script: 'curl -fsS http://localhost:8081/actuator/health',
+                            returnStatus: true
+                        ) == 0
+                    }
+                }
+
+                echo 'Application is healthy!'
             }
         }
-
     }
 
-   post {
-       success {
-           emailext(
-               from: 'elmanssouriomar@gmail.com',
-               to: 'elmanssouriomar@gmail.com',
-               subject: "✅ SUCCESS: ${env.JOB_NAME} #${env.BUILD_NUMBER}",
-               body: """
-               Deployment successful!
+    post {
+        success {
+            emailext(
+                to: 'elmanssouriomar@gmail.com',
+                cc: 'chadad.mohamed@gmail.com',
+                subject: "SUCCESS: ${env.JOB_NAME} #${env.BUILD_NUMBER}",
+                body: """
+                Deployment successful!
 
-               Job: ${env.JOB_NAME}
-               Build: #${env.BUILD_NUMBER}
-               URL: ${env.BUILD_URL}
-               """
-           )
-       }
+                Image: order-app:${env.IMAGE_TAG}
+                Build URL: ${env.BUILD_URL}
+                """
+            )
+        }
 
-       failure {
-           emailext(
-               from: 'elmanssouriomar@gmail.com',
-               to: 'elmanssouriomar@gmail.com',
-               subject: "❌ FAILED: ${env.JOB_NAME} #${env.BUILD_NUMBER}",
-               body: """
-               Deployment failed!
+        failure {
+            // Show application logs for troubleshooting
+            sh 'docker compose logs --tail=100 app || true'
 
-               Job: ${env.JOB_NAME}
-               Build: #${env.BUILD_NUMBER}
-               URL: ${env.BUILD_URL}
-               """
-           )
-       }
-   }
+            emailext(
+                to: 'elmanssouriomar@gmail.com',
+                cc: 'chadad.mohamed@gmail.com',
+                subject: "FAILED: ${env.JOB_NAME} #${env.BUILD_NUMBER}",
+                body: """
+                Deployment failed.
 
+                Image: order-app:${env.IMAGE_TAG}
+                Build URL: ${env.BUILD_URL}
+                """
+            )
+        }
+    }
 }

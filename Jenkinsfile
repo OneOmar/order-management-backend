@@ -63,6 +63,20 @@ pipeline {
             }
         }
 
+        stage('SonarQube Analysis') {
+            // Analyze only new builds, not rollbacks
+            when {
+                expression { !params.IMAGE_TAG?.trim() }
+            }
+            steps {
+                // Connect to the configured SonarQube server
+                withSonarQubeEnv('SonarQube') {
+                    // Analyze the compiled Java code
+                    sh './mvnw -B org.sonarsource.scanner.maven:sonar-maven-plugin:3.11.0.3922:sonar -Dsonar.projectKey=order-management-backend'
+                }
+            }
+        }
+
         stage('Docker Build') {
             when {
                 expression { !params.IMAGE_TAG?.trim() }

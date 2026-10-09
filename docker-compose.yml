@@ -31,7 +31,7 @@ services:
 
     app:
         build: .
-        image: order-app
+        image: order-app:${IMAGE_TAG:-latest}
         container_name: order-app
 
         # attend que la DB soit HEALTHY

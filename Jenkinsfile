@@ -77,6 +77,26 @@ pipeline {
             }
         }
 
+        stage('Quality Gate') {
+            // Check only new builds, not rollbacks
+            when {
+                expression { !params.IMAGE_TAG?.trim() }
+            }
+            steps {
+                // Wait up to 5 minutes for SonarQube's result
+                timeout(time: 5, unit: 'MINUTES') {
+                    script {
+                        def qg = waitForQualityGate()
+
+                        // Stop the pipeline if quality criteria fail
+                        if (qg.status != 'OK') {
+                            error "Quality Gate failed: ${qg.status}"
+                        }
+                    }
+                }
+            }
+        }
+
         stage('Docker Build') {
             when {
                 expression { !params.IMAGE_TAG?.trim() }

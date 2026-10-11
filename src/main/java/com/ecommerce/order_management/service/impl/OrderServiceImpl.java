@@ -1,13 +1,16 @@
 package com.ecommerce.order_management.service.impl;
 
 import com.ecommerce.order_management.entity.*;
+import com.ecommerce.order_management.event.OrderCreatedEvent;
 import com.ecommerce.order_management.exception.InsufficientStockException;
 import com.ecommerce.order_management.exception.NotFoundException;
 import com.ecommerce.order_management.repository.OrderRepository;
+import com.ecommerce.order_management.service.EmailService;
 import com.ecommerce.order_management.service.OrderService;
 import com.ecommerce.order_management.service.ProductService;
 import com.ecommerce.order_management.service.UserService;
 import lombok.RequiredArgsConstructor;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
@@ -26,6 +29,8 @@ public class OrderServiceImpl implements OrderService {
     private final OrderRepository orderRepository;
     private final ProductService productService;
     private final UserService userService;
+    private final EmailService emailService;
+    private final ApplicationEventPublisher eventPublisher;
 
     /**
      * Créer une commande :
@@ -86,8 +91,18 @@ public class OrderServiceImpl implements OrderService {
         orderRequest.setTotalAmount(total);
         orderRequest.setStatus(OrderStatus.PENDING);
 
-        // Persistance (cascade items)
-        return orderRepository.save(orderRequest);
+        Order savedOrder = orderRepository.save(orderRequest);
+
+        // Publish the event after saving the order.
+        eventPublisher.publishEvent(
+                new OrderCreatedEvent(
+                        user.getEmail(),
+                        savedOrder.getId(),
+                        savedOrder.getTotalAmount()
+                )
+        );
+
+        return savedOrder;
     }
 
     /**

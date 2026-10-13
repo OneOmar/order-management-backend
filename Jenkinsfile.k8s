@@ -7,10 +7,37 @@ pipeline {
         IMAGE_TAG = "k8s-${BUILD_NUMBER}"
     }
 
+    options {
+        timeout(time: 30, unit: 'MINUTES')
+        disableConcurrentBuilds()
+        buildDiscarder(logRotator(numToKeepStr: '20'))
+    }
+
     stages {
+        stage('Checkout') {
+            steps {
+                checkout scm
+                sh 'git log -1 --oneline'
+            }
+        }
+
+        stage('Prepare') {
+            steps {
+                sh '''
+                    test -f mvnw || {
+                        echo "Maven Wrapper not found"
+                        exit 1
+                    }
+
+                    docker --version
+                '''
+            }
+        }
+
         stage('Build JAR') {
             steps {
-                sh 'mvn -B -DskipTests clean package'
+                sh 'chmod +x mvnw'
+                sh './mvnw -B clean package -DskipTests'
             }
         }
 
@@ -38,9 +65,7 @@ pipeline {
                           --username "$GHCR_USER" \
                           --password-stdin
 
-                        docker push ${IMAGE_NAME}:${IMAGE_TAG}
-
-                        docker logout ghcr.io
+                        docker push "${IMAGE_NAME}:${IMAGE_TAG}"
                     '''
                 }
             }
@@ -49,7 +74,15 @@ pipeline {
 
     post {
         success {
-            echo "Image publiée : ${IMAGE_NAME}:${IMAGE_TAG}"
+            echo "Image published: ${IMAGE_NAME}:${IMAGE_TAG}"
+        }
+
+        failure {
+            echo 'Kubernetes image build/publish pipeline failed.'
+        }
+
+        always {
+            sh 'docker logout ghcr.io || true'
         }
     }
 }

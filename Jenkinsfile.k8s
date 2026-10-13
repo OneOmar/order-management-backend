@@ -82,6 +82,7 @@ pipeline {
                 ]) {
                     sh '''
                         set +x
+                        export KUBECONFIG=/dev/null
 
                         # Update the application image
                         kubectl \

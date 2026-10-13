@@ -1,0 +1,55 @@
+
+pipeline {
+    agent any
+
+    environment {
+        IMAGE_NAME = 'ghcr.io/oneomar/order-management-backend'
+        IMAGE_TAG = "k8s-${BUILD_NUMBER}"
+    }
+
+    stages {
+        stage('Build JAR') {
+            steps {
+                sh 'mvn -B -DskipTests clean package'
+            }
+        }
+
+        stage('Build Docker Image') {
+            steps {
+                sh '''
+                    docker build \
+                      -t ${IMAGE_NAME}:${IMAGE_TAG} .
+                '''
+            }
+        }
+
+        stage('Push to GHCR') {
+            steps {
+                withCredentials([
+                    usernamePassword(
+                        credentialsId: 'ghcr-credentials',
+                        usernameVariable: 'GHCR_USER',
+                        passwordVariable: 'GHCR_TOKEN'
+                    )
+                ]) {
+                    sh '''
+                        set +x
+                        echo "$GHCR_TOKEN" | docker login ghcr.io \
+                          --username "$GHCR_USER" \
+                          --password-stdin
+
+                        docker push ${IMAGE_NAME}:${IMAGE_TAG}
+
+                        docker logout ghcr.io
+                    '''
+                }
+            }
+        }
+    }
+
+    post {
+        success {
+            echo "Image publiée : ${IMAGE_NAME}:${IMAGE_TAG}"
+        }
+    }
+}

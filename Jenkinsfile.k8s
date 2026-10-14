@@ -84,7 +84,7 @@ pipeline {
                         set +x
                         export KUBECONFIG=/dev/null
 
-                        # Update the application image
+                        # Deploy the new application image
                         kubectl \
                           --server=https://127.0.0.1:6443 \
                           --certificate-authority=/etc/jenkins/k3s-server-ca.crt \
@@ -101,8 +101,25 @@ pipeline {
                           rollout status deployment/order-app \
                           -n order-management \
                           --timeout=180s
+                    '''
+                }
+            }
+        }
+        
+        # Verify application health
+        stage('Verify Application Health') {
+            steps {
+                withCredentials([
+                    string(
+                        credentialsId: 'k3s-jenkins-token',
+                        variable: 'K8S_TOKEN'
+                    )
+                ]) {
+                    sh '''
+                        set +x
+                        export KUBECONFIG=/dev/null
 
-                        # Verify application health
+                        # Check application health from inside the cluster
                         kubectl \
                           --server=https://127.0.0.1:6443 \
                           --certificate-authority=/etc/jenkins/k3s-server-ca.crt \
@@ -112,9 +129,22 @@ pipeline {
                           --rm -i \
                           --restart=Never \
                           --image=curlimages/curl:8.12.1 \
-                          --command -- \
-                          curl -fsS \
-                          http://order-app:8080/actuator/health
+                          --command -- sh -c '
+                            # Retry for up to 60 seconds
+                            for i in $(seq 1 12); do
+                              if curl -fsS \
+                                http://order-app:8080/actuator/health; then
+                                exit 0
+                              fi
+
+                              echo "Health check attempt $i/12 failed."
+                              sleep 5
+                            done
+
+                            # Fail the pipeline if the app stays unhealthy
+                            echo "Health check failed after 60 seconds."
+                            exit 1
+                          '
                     '''
                 }
             }

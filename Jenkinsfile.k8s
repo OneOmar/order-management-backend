@@ -101,6 +101,16 @@ pipeline {
                           rollout status deployment/order-app \
                           -n order-management \
                           --timeout=180s
+
+                        # Verify application health
+                        kubectl run test-api-${BUILD_NUMBER} \
+                          --namespace=order-management \
+                          --rm -i \
+                          --restart=Never \
+                          --image=curlimages/curl:8.12.1 \
+                          --command -- \
+                          curl -fsS \
+                          http://order-app:8080/actuator/health
                     '''
                 }
             }

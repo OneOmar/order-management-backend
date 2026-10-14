@@ -87,7 +87,7 @@ pipeline {
                         # Update the application image
                         kubectl \
                           --server=https://127.0.0.1:6443 \
-                          --insecure-skip-tls-verify=true \
+                          --certificate-authority=/etc/jenkins/k3s-server-ca.crt \
                           --token="$K8S_TOKEN" \
                           set image deployment/order-app \
                           order-app=${IMAGE_NAME}:${IMAGE_TAG} \
@@ -96,7 +96,7 @@ pipeline {
                         # Wait for the rollout to complete
                         kubectl \
                           --server=https://127.0.0.1:6443 \
-                          --insecure-skip-tls-verify=true \
+                          --certificate-authority=/etc/jenkins/k3s-server-ca.crt \
                           --token="$K8S_TOKEN" \
                           rollout status deployment/order-app \
                           -n order-management \

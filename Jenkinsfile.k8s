@@ -105,8 +105,8 @@ pipeline {
                 }
             }
         }
-        
-        # Verify application health
+
+        // Verify application health
         stage('Verify Application Health') {
             steps {
                 withCredentials([

@@ -87,6 +87,7 @@ pipeline {
                     sh '''
                         set -eu
                         set +x
+			export KUBECONFIG=/dev/null
 
                         # Update the application image.
                         kubectl \
@@ -121,6 +122,7 @@ pipeline {
                     sh '''
                         set -eu
                         set +x
+			export KUBECONFIG=/dev/null
 
                         # Check application health from inside the cluster.
                         kubectl \

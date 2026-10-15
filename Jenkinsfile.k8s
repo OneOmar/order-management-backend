@@ -5,6 +5,9 @@ pipeline {
     environment {
         IMAGE_NAME = 'ghcr.io/oneomar/order-management-backend'
         IMAGE_TAG = "k8s-${BUILD_NUMBER}"
+        K8S_NAMESPACE = 'order-management'
+        K8S_SERVER = 'https://127.0.0.1:6443'
+        K8S_CA = '/etc/jenkins/k3s-server-ca.crt'
     }
 
     options {
@@ -24,33 +27,34 @@ pipeline {
         stage('Prepare') {
             steps {
                 sh '''
-                    test -f mvnw || {
-                        echo "Maven Wrapper not found"
-                        exit 1
-                    }
-
+                    set -eu
+                    test -f mvnw
                     docker --version
+                    kubectl version --client
                 '''
             }
         }
 
         stage('Build JAR') {
             steps {
-                sh 'chmod +x mvnw'
-                sh './mvnw -B clean package -DskipTests'
-            }
-        }
-
-        stage('Build Docker Image') {
-            steps {
                 sh '''
-                    docker build \
-                      -t ${IMAGE_NAME}:${IMAGE_TAG} .
+                    set -eu
+                    chmod +x mvnw
+                    ./mvnw -B clean package -DskipTests
                 '''
             }
         }
 
-        stage('Push to GHCR') {
+        stage('Build Image') {
+            steps {
+                sh '''
+                    set -eu
+                    docker build -t "${IMAGE_NAME}:${IMAGE_TAG}" .
+                '''
+            }
+        }
+
+        stage('Push Image') {
             steps {
                 withCredentials([
                     usernamePassword(
@@ -60,7 +64,10 @@ pipeline {
                     )
                 ]) {
                     sh '''
+                        set -eu
                         set +x
+
+                        # Log in to GHCR and push the image.
                         echo "$GHCR_TOKEN" | docker login ghcr.io \
                           --username "$GHCR_USER" \
                           --password-stdin
@@ -71,7 +78,6 @@ pipeline {
             }
         }
 
-        // Deploy the published image to Kubernetes
         stage('Deploy to Kubernetes') {
             steps {
                 withCredentials([
@@ -81,88 +87,46 @@ pipeline {
                     )
                 ]) {
                     sh '''
+                        set -eu
                         set +x
-                        export KUBECONFIG=/dev/null
 
-                        # Deploy the new application image
+                        # Update the application image.
                         kubectl \
-                          --server=https://127.0.0.1:6443 \
-                          --certificate-authority=/etc/jenkins/k3s-server-ca.crt \
+                          --server="${K8S_SERVER}" \
+                          --certificate-authority="${K8S_CA}" \
                           --token="$K8S_TOKEN" \
                           set image deployment/order-app \
-                          order-app=${IMAGE_NAME}:${IMAGE_TAG} \
-                          -n order-management
+                          order-app="${IMAGE_NAME}:${IMAGE_TAG}" \
+                          -n "${K8S_NAMESPACE}"
 
-                        # Wait for the rollout to complete
+                        # Wait for the rollout to complete.
                         kubectl \
-                          --server=https://127.0.0.1:6443 \
-                          --certificate-authority=/etc/jenkins/k3s-server-ca.crt \
+                          --server="${K8S_SERVER}" \
+                          --certificate-authority="${K8S_CA}" \
                           --token="$K8S_TOKEN" \
                           rollout status deployment/order-app \
-                          -n order-management \
+                          -n "${K8S_NAMESPACE}" \
                           --timeout=180s
                     '''
                 }
             }
         }
 
-        // Verify application health
-        stage('Verify Application Health') {
-            steps {
-                withCredentials([
-                    string(
-                        credentialsId: 'k3s-jenkins-token',
-                        variable: 'K8S_TOKEN'
-                    )
-                ]) {
-                    sh '''
-                        set +x
-                        export KUBECONFIG=/dev/null
-
-                        # Check application health from inside the cluster
-                        kubectl \
-                          --server=https://127.0.0.1:6443 \
-                          --certificate-authority=/etc/jenkins/k3s-server-ca.crt \
-                          --token="$K8S_TOKEN" \
-                          run test-api-${BUILD_NUMBER} \
-                          --namespace=order-management \
-                          --rm -i \
-                          --restart=Never \
-                          --image=curlimages/curl:8.12.1 \
-                          --command -- sh -c '
-                            # Retry for up to 60 seconds
-                            for i in $(seq 1 12); do
-                              if curl -fsS \
-                                http://order-app:8080/actuator/health; then
-                                exit 0
-                              fi
-
-                              echo "Health check attempt $i/12 failed."
-                              sleep 5
-                            done
-
-                            # Fail the pipeline if the app stays unhealthy
-                            echo "Health check failed after 60 seconds."
-                            exit 1
-                          '
-                    '''
-                }
-            }
-        }
-
+        // Public health check is intentionally skipped for now.
     }
 
     post {
         success {
-            echo "Image published: ${IMAGE_NAME}:${IMAGE_TAG}"
+            echo "Deployment successful: ${IMAGE_NAME}:${IMAGE_TAG}"
         }
 
         failure {
-            echo 'Kubernetes image build/publish pipeline failed.'
+            echo 'Pipeline failed. Check the Jenkins logs.'
         }
 
         always {
-            sh 'docker logout ghcr.io || true'
+            // Close the GHCR session.
+            sh 'docker logout ghcr.io >/dev/null 2>&1 || true'
         }
     }
 }

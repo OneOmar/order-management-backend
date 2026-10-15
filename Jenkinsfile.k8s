@@ -67,11 +67,9 @@ pipeline {
                         set -eu
                         set +x
 
-                        # Log in to GHCR and push the image.
+                        # Publish the image to GHCR.
                         echo "$GHCR_TOKEN" | docker login ghcr.io \
-                          --username "$GHCR_USER" \
-                          --password-stdin
-
+                          --username "$GHCR_USER" --password-stdin
                         docker push "${IMAGE_NAME}:${IMAGE_TAG}"
                     '''
                 }
@@ -112,7 +110,47 @@ pipeline {
             }
         }
 
-        // Public health check is intentionally skipped for now.
+        stage('Health Check') {
+            steps {
+                withCredentials([
+                    string(
+                        credentialsId: 'k3s-jenkins-token',
+                        variable: 'K8S_TOKEN'
+                    )
+                ]) {
+                    sh '''
+                        set -eu
+                        set +x
+
+                        # Check application health from inside the cluster.
+                        kubectl \
+                          --server="${K8S_SERVER}" \
+                          --certificate-authority="${K8S_CA}" \
+                          --token="$K8S_TOKEN" \
+                          run "test-api-${BUILD_NUMBER}" \
+                          --namespace="${K8S_NAMESPACE}" \
+                          --rm -i \
+                          --restart=Never \
+                          --image=curlimages/curl:8.12.1 \
+                          --command -- sh -c '
+                            for i in $(seq 1 12); do
+                              if curl -fsS \
+                                http://order-app:8080/actuator/health; then
+                                echo "Health check passed."
+                                exit 0
+                              fi
+
+                              echo "Attempt $i/12 failed."
+                              sleep 5
+                            done
+
+                            echo "Health check failed."
+                            exit 1
+                          '
+                    '''
+                }
+            }
+        }
     }
 
     post {

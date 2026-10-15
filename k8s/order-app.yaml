@@ -15,7 +15,7 @@ spec:
     spec:
       containers:
         - name: order-app
-          image: ghcr.io/oneomar/order-management-backend:k8s-13
+          image: ghcr.io/oneomar/order-management-backend:k8s-14
           imagePullPolicy: IfNotPresent
           ports:
             - containerPort: 8080
@@ -41,7 +41,7 @@ spec:
             - name: SPRING_PROFILES_ACTIVE
               value: "prod"
             - name: SPRING_DATASOURCE_URL
-              value: "jdbc:postgresql://db:5432/orderdb"
+              value: "jdbc:postgresql://db:5432/production_orderdb"
             - name: SPRING_DATASOURCE_USERNAME
               valueFrom:
                 secretKeyRef:

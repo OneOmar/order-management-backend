@@ -161,7 +161,37 @@ pipeline {
         }
 
         failure {
-            echo 'Pipeline failed. Check the Jenkins logs.'
+            echo 'Pipeline failed. Rolling back application deployment.'
+
+            withCredentials([
+                string(
+                    credentialsId: 'k3s-jenkins-token',
+                    variable: 'K8S_TOKEN'
+                )
+            ]) {
+                sh '''
+                    set -eu
+                    set +x
+                    export KUBECONFIG=/dev/null
+
+                    # Restore the previous deployment revision.
+                    kubectl \
+                      --server="${K8S_SERVER}" \
+                      --certificate-authority="${K8S_CA}" \
+                      --token="$K8S_TOKEN" \
+                      rollout undo deployment/order-app \
+                      -n "${K8S_NAMESPACE}"
+
+                    # Wait for the rollback to finish.
+                    kubectl \
+                      --server="${K8S_SERVER}" \
+                      --certificate-authority="${K8S_CA}" \
+                      --token="$K8S_TOKEN" \
+                      rollout status deployment/order-app \
+                      -n "${K8S_NAMESPACE}" \
+                      --timeout=180s
+                '''
+            }
         }
 
         always {
@@ -169,4 +199,5 @@ pipeline {
             sh 'docker logout ghcr.io >/dev/null 2>&1 || true'
         }
     }
+
 }

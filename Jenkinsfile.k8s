@@ -8,6 +8,7 @@ pipeline {
         K8S_NAMESPACE = 'order-management'
         K8S_SERVER = 'https://127.0.0.1:6443'
         K8S_CA = '/etc/jenkins/k3s-server-ca.crt'
+        DEPLOY_STARTED = 'false'
     }
 
     options {
@@ -67,9 +68,9 @@ pipeline {
                         set -eu
                         set +x
 
-                        # Publish the image to GHCR.
                         echo "$GHCR_TOKEN" | docker login ghcr.io \
                           --username "$GHCR_USER" --password-stdin
+
                         docker push "${IMAGE_NAME}:${IMAGE_TAG}"
                     '''
                 }
@@ -78,35 +79,44 @@ pipeline {
 
         stage('Deploy to Kubernetes') {
             steps {
-                withCredentials([
-                    string(
-                        credentialsId: 'k3s-jenkins-token',
-                        variable: 'K8S_TOKEN'
-                    )
-                ]) {
-                    sh '''
-                        set -eu
-                        set +x
-			export KUBECONFIG=/dev/null
+                script {
+                    withCredentials([
+                        string(
+                            credentialsId: 'k3s-jenkins-token',
+                            variable: 'K8S_TOKEN'
+                        )
+                    ]) {
+                        sh '''
+                            set -eu
+                            set +x
+                            export KUBECONFIG=/dev/null
 
-                        # Update the application image.
-                        kubectl \
-                          --server="${K8S_SERVER}" \
-                          --certificate-authority="${K8S_CA}" \
-                          --token="$K8S_TOKEN" \
-                          set image deployment/order-app \
-                          order-app="${IMAGE_NAME}:${IMAGE_TAG}" \
-                          -n "${K8S_NAMESPACE}"
+                            kubectl \
+                              --server="${K8S_SERVER}" \
+                              --certificate-authority="${K8S_CA}" \
+                              --token="$K8S_TOKEN" \
+                              set image deployment/order-app \
+                              order-app="${IMAGE_NAME}:${IMAGE_TAG}" \
+                              -n "${K8S_NAMESPACE}"
+                        '''
 
-                        # Wait for the rollout to complete.
-                        kubectl \
-                          --server="${K8S_SERVER}" \
-                          --certificate-authority="${K8S_CA}" \
-                          --token="$K8S_TOKEN" \
-                          rollout status deployment/order-app \
-                          -n "${K8S_NAMESPACE}" \
-                          --timeout=180s
-                    '''
+                        // Rollback is needed if this deployment or a later stage fails.
+                        env.DEPLOY_STARTED = 'true'
+
+                        sh '''
+                            set -eu
+                            set +x
+                            export KUBECONFIG=/dev/null
+
+                            kubectl \
+                              --server="${K8S_SERVER}" \
+                              --certificate-authority="${K8S_CA}" \
+                              --token="$K8S_TOKEN" \
+                              rollout status deployment/order-app \
+                              -n "${K8S_NAMESPACE}" \
+                              --timeout=180s
+                        '''
+                    }
                 }
             }
         }
@@ -122,9 +132,8 @@ pipeline {
                     sh '''
                         set -eu
                         set +x
-			export KUBECONFIG=/dev/null
+                        export KUBECONFIG=/dev/null
 
-                        # Check application health from inside the cluster.
                         kubectl \
                           --server="${K8S_SERVER}" \
                           --certificate-authority="${K8S_CA}" \
@@ -161,43 +170,45 @@ pipeline {
         }
 
         failure {
-            echo 'Pipeline failed. Rolling back application deployment.'
+            script {
+                if (env.DEPLOY_STARTED == 'true') {
+                    echo 'Deployment failed. Rolling back application.'
 
-            withCredentials([
-                string(
-                    credentialsId: 'k3s-jenkins-token',
-                    variable: 'K8S_TOKEN'
-                )
-            ]) {
-                sh '''
-                    set -eu
-                    set +x
-                    export KUBECONFIG=/dev/null
+                    withCredentials([
+                        string(
+                            credentialsId: 'k3s-jenkins-token',
+                            variable: 'K8S_TOKEN'
+                        )
+                    ]) {
+                        sh '''
+                            set -eu
+                            set +x
+                            export KUBECONFIG=/dev/null
 
-                    # Restore the previous deployment revision.
-                    kubectl \
-                      --server="${K8S_SERVER}" \
-                      --certificate-authority="${K8S_CA}" \
-                      --token="$K8S_TOKEN" \
-                      rollout undo deployment/order-app \
-                      -n "${K8S_NAMESPACE}"
+                            kubectl \
+                              --server="${K8S_SERVER}" \
+                              --certificate-authority="${K8S_CA}" \
+                              --token="$K8S_TOKEN" \
+                              rollout undo deployment/order-app \
+                              -n "${K8S_NAMESPACE}"
 
-                    # Wait for the rollback to finish.
-                    kubectl \
-                      --server="${K8S_SERVER}" \
-                      --certificate-authority="${K8S_CA}" \
-                      --token="$K8S_TOKEN" \
-                      rollout status deployment/order-app \
-                      -n "${K8S_NAMESPACE}" \
-                      --timeout=180s
-                '''
+                            kubectl \
+                              --server="${K8S_SERVER}" \
+                              --certificate-authority="${K8S_CA}" \
+                              --token="$K8S_TOKEN" \
+                              rollout status deployment/order-app \
+                              -n "${K8S_NAMESPACE}" \
+                              --timeout=180s
+                        '''
+                    }
+                } else {
+                    echo 'Failure before deployment. No rollback needed.'
+                }
             }
         }
 
         always {
-            // Close the GHCR session.
             sh 'docker logout ghcr.io >/dev/null 2>&1 || true'
         }
     }
-
 }
